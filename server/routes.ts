@@ -6,7 +6,7 @@ import { schedulerService } from "./services/scheduler";
 import { channelParserService } from "./services/channelParser";
 import { webChannelParserService } from "./services/webChannelParser";
 import { translationService } from "./services/translationService";
-import { insertChannelPairSchema, insertSettingsSchema, insertScheduledPostSchema } from "@shared/schema";
+import { insertChannelPairSchema, insertSettingsSchema, insertScheduledPostSchema, insertDraftPostSchema } from "@shared/schema";
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -392,6 +392,131 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Error deleting scheduled post:', error);
       res.status(500).json({ message: "Failed to delete scheduled post" });
+    }
+  });
+
+  // Draft posts routes
+  app.get("/api/draft-posts", async (req, res) => {
+    try {
+      const channelPairId = req.query.channelPairId as string;
+      const drafts = await storage.getDraftPosts(channelPairId);
+      res.json(drafts);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to get draft posts" });
+    }
+  });
+
+  app.get("/api/draft-posts/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const draft = await storage.getDraftPost(id);
+      
+      if (!draft) {
+        return res.status(404).json({ message: "Draft post not found" });
+      }
+      
+      res.json(draft);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to get draft post" });
+    }
+  });
+
+  app.put("/api/draft-posts/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const updates = req.body;
+      
+      // Remove fields that shouldn't be updated
+      delete updates.id;
+      delete updates.channelPairId;
+      delete updates.originalPostId;
+      delete updates.createdAt;
+      
+      const draft = await storage.updateDraftPost(id, updates);
+      
+      if (!draft) {
+        return res.status(404).json({ message: "Draft post not found" });
+      }
+      
+      // Log activity
+      await storage.createActivityLog({
+        type: 'draft_post_updated',
+        description: `Draft post "${draft.content?.substring(0, 50)}..." updated`,
+        channelPairId: draft.channelPairId,
+      });
+      
+      res.json(draft);
+    } catch (error) {
+      console.error('Error updating draft post:', error);
+      res.status(500).json({ message: "Failed to update draft post" });
+    }
+  });
+
+  app.delete("/api/draft-posts/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      
+      // Get draft info before deletion for logging
+      const draft = await storage.getDraftPost(id);
+      
+      const deleted = await storage.deleteDraftPost(id);
+      
+      if (!deleted) {
+        return res.status(404).json({ message: "Draft post not found" });
+      }
+      
+      // Log activity
+      if (draft) {
+        await storage.createActivityLog({
+          type: 'draft_post_deleted',
+          description: `Draft post "${draft.content?.substring(0, 50)}..." deleted`,
+          channelPairId: draft.channelPairId,
+        });
+      }
+      
+      res.json({ message: "Draft post deleted successfully" });
+    } catch (error) {
+      console.error('Error deleting draft post:', error);
+      res.status(500).json({ message: "Failed to delete draft post" });
+    }
+  });
+
+  app.post("/api/draft-posts/:id/publish", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const draft = await storage.getDraftPost(id);
+      
+      if (!draft) {
+        return res.status(404).json({ message: "Draft post not found" });
+      }
+      
+      // Create scheduled post from draft
+      const scheduledPost = await storage.createScheduledPost({
+        channelPairId: draft.channelPairId,
+        title: `Published draft: ${draft.content?.substring(0, 30)}...`,
+        content: draft.content || '',
+        mediaUrls: draft.mediaUrls || [],
+        publishAt: new Date(), // Publish immediately
+        status: 'scheduled',
+      });
+      
+      // Delete the draft
+      await storage.deleteDraftPost(id);
+      
+      // Log activity
+      await storage.createActivityLog({
+        type: 'draft_post_published',
+        description: `Draft post published: "${draft.content?.substring(0, 50)}..."`,
+        channelPairId: draft.channelPairId,
+      });
+      
+      res.json({ 
+        message: "Draft post published successfully",
+        scheduledPost 
+      });
+    } catch (error) {
+      console.error('Error publishing draft post:', error);
+      res.status(500).json({ message: "Failed to publish draft post" });
     }
   });
 
