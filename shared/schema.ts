@@ -16,6 +16,7 @@ export const channelPairs = pgTable("channel_pairs", {
   contentFilters: jsonb("content_filters").default({}),
   customBranding: text("custom_branding"),
   autoTranslate: boolean("auto_translate").default(false), // enable/disable auto translation to Russian
+  copyMode: text("copy_mode").notNull().default("auto_publish"), // auto_publish, draft_mode
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -69,6 +70,22 @@ export const scheduledPosts = pgTable("scheduled_posts", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+export const draftPosts = pgTable("draft_posts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  channelPairId: varchar("channel_pair_id").references(() => channelPairs.id).notNull(),
+  originalPostId: text("original_post_id").notNull(),
+  originalContent: text("original_content"), // Original content before translation/editing
+  content: text("content"), // Current edited content
+  mediaUrls: jsonb("media_urls").default([]),
+  status: text("status").notNull().default("draft"), // draft, published, discarded
+  isTranslated: boolean("is_translated").default(false),
+  originalLanguage: text("original_language"),
+  publishedPostId: text("published_post_id"),
+  publishedAt: timestamp("published_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Insert schemas
 export const insertChannelPairSchema = createInsertSchema(channelPairs).omit({
   id: true,
@@ -99,6 +116,13 @@ export const insertScheduledPostSchema = createInsertSchema(scheduledPosts).omit
   publishedAt: true,
 });
 
+export const insertDraftPostSchema = createInsertSchema(draftPosts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  publishedAt: true,
+});
+
 // Types
 export type ChannelPair = typeof channelPairs.$inferSelect;
 export type InsertChannelPair = z.infer<typeof insertChannelPairSchema>;
@@ -114,3 +138,6 @@ export type InsertSettings = z.infer<typeof insertSettingsSchema>;
 
 export type ScheduledPost = typeof scheduledPosts.$inferSelect;
 export type InsertScheduledPost = z.infer<typeof insertScheduledPostSchema>;
+
+export type DraftPost = typeof draftPosts.$inferSelect;
+export type InsertDraftPost = z.infer<typeof insertDraftPostSchema>;
