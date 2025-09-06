@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { 
   ArrowRight, 
   MoreVertical, 
@@ -19,12 +20,13 @@ export function ChannelPairs() {
   const { data: channelPairs, isLoading } = useQuery({
     queryKey: ["/api/channel-pairs"],
   });
+  const { t } = useLanguage();
 
   if (isLoading) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Active Channel Pairs</CardTitle>
+          <CardTitle>{t('channel-pairs.title')}</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
@@ -80,7 +82,7 @@ export function ChannelPairs() {
         <div className="flex items-center justify-between">
           <CardTitle>Active Channel Pairs</CardTitle>
           <Button variant="ghost" size="sm" data-testid="button-view-all-pairs">
-            View All
+            {t('channel-pairs.view-all')}
           </Button>
         </div>
       </CardHeader>
@@ -88,8 +90,8 @@ export function ChannelPairs() {
         <div className="space-y-4">
           {!channelPairs || channelPairs.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
-              <p>No channel pairs configured yet.</p>
-              <p className="text-sm">Create your first channel pair to get started.</p>
+              <p>{t('channel-pairs.no-pairs')}</p>
+              <p className="text-sm">{t('channel-pairs.create-first')}</p>
             </div>
           ) : (
             channelPairs.map((pair: any) => (
@@ -126,7 +128,7 @@ export function ChannelPairs() {
                   <div className="flex items-center space-x-1">
                     <div className={`w-2 h-2 ${getStatusDot(pair.status)} rounded-full`}></div>
                     <span className="text-sm text-muted-foreground capitalize">
-                      {pair.status}
+                      {t(`channel-pairs.${pair.status}`)}
                     </span>
                   </div>
                   <DropdownMenu>
@@ -141,16 +143,16 @@ export function ChannelPairs() {
                     </DropdownMenuTrigger>
                     <DropdownMenuContent>
                       <DropdownMenuItem data-testid={`menu-edit-${pair.id}`}>
-                        Edit
+                        {t('channel-pairs.edit')}
                       </DropdownMenuItem>
                       <DropdownMenuItem data-testid={`menu-pause-${pair.id}`}>
-                        {pair.status === "active" ? "Pause" : "Resume"}
+                        {pair.status === "active" ? t('channel-pairs.pause') : t('channel-pairs.resume')}
                       </DropdownMenuItem>
                       <DropdownMenuItem 
                         className="text-destructive"
                         data-testid={`menu-delete-${pair.id}`}
                       >
-                        Delete
+                        {t('channel-pairs.delete')}
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>

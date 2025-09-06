@@ -1,7 +1,10 @@
 import { Sidebar } from "@/components/sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 export default function Scheduler() {
+  const { t } = useLanguage();
+  
   return (
     <div className="flex h-screen bg-background">
       <Sidebar />
@@ -9,9 +12,9 @@ export default function Scheduler() {
       <div className="flex-1 flex flex-col overflow-hidden">
         <header className="bg-card border-b border-border px-6 py-4">
           <div>
-            <h1 className="text-2xl font-bold">Scheduler</h1>
+            <h1 className="text-2xl font-bold">{t('pages.scheduler.title')}</h1>
             <p className="text-muted-foreground">
-              Configure posting schedules and timing preferences
+              {t('pages.scheduler.subtitle')}
             </p>
           </div>
         </header>
@@ -19,11 +22,11 @@ export default function Scheduler() {
         <main className="flex-1 overflow-auto p-6">
           <Card>
             <CardHeader>
-              <CardTitle>Schedule Management</CardTitle>
+              <CardTitle>{t('cards.schedule-management')}</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-center py-8 text-muted-foreground">
-                <p>Scheduling interface will be implemented here.</p>
+                <p>{t('placeholder.scheduling')}</p>
               </div>
             </CardContent>
           </Card>

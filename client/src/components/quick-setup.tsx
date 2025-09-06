@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -32,6 +33,7 @@ type FormData = z.infer<typeof formSchema>;
 export function QuickSetup() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { t } = useLanguage();
   
   const {
     register,
@@ -94,14 +96,14 @@ export function QuickSetup() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Quick Setup</CardTitle>
+        <CardTitle>{t('setup.title')}</CardTitle>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit(onSubmit)}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-4">
               <div>
-                <Label htmlFor="sourceUsername">Source Channel</Label>
+                <Label htmlFor="sourceUsername">{t('setup.source-channel')}</Label>
                 <div className="relative">
                   <Input
                     id="sourceUsername"
@@ -119,7 +121,7 @@ export function QuickSetup() {
               </div>
 
               <div>
-                <Label htmlFor="targetUsername">Target Channel</Label>
+                <Label htmlFor="targetUsername">{t('setup.target-channel')}</Label>
                 <div className="relative">
                   <Input
                     id="targetUsername"
@@ -137,20 +139,20 @@ export function QuickSetup() {
               </div>
 
               <div>
-                <Label htmlFor="postingDelay">Posting Delay</Label>
+                <Label htmlFor="postingDelay">{t('setup.posting-delay')}</Label>
                 <Select 
                   value={watch("postingDelay")?.toString()} 
                   onValueChange={(value) => setValue("postingDelay", parseInt(value))}
                 >
                   <SelectTrigger data-testid="select-posting-delay">
-                    <SelectValue placeholder="Select delay" />
+                    <SelectValue placeholder={t('setup.select-delay')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="0">Instant</SelectItem>
-                    <SelectItem value="5">5 minutes</SelectItem>
-                    <SelectItem value="15">15 minutes</SelectItem>
-                    <SelectItem value="30">30 minutes</SelectItem>
-                    <SelectItem value="60">1 hour</SelectItem>
+                    <SelectItem value="0">{t('setup.instant')}</SelectItem>
+                    <SelectItem value="5">5 {t('setup.minutes')}</SelectItem>
+                    <SelectItem value="15">15 {t('setup.minutes')}</SelectItem>
+                    <SelectItem value="30">30 {t('setup.minutes')}</SelectItem>
+                    <SelectItem value="60">1 {t('setup.hour')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -158,7 +160,7 @@ export function QuickSetup() {
 
             <div className="space-y-4">
               <div>
-                <Label>Content Filters</Label>
+                <Label>{t('setup.content-filters')}</Label>
                 <div className="space-y-3 mt-2">
                   <div className="flex items-center space-x-2">
                     <Checkbox
@@ -173,7 +175,7 @@ export function QuickSetup() {
                       htmlFor="removeChannelMentions" 
                       className="text-sm font-normal"
                     >
-                      Remove original channel mentions
+                      {t('setup.remove-mentions')}
                     </Label>
                   </div>
                   <div className="flex items-center space-x-2">
@@ -189,7 +191,7 @@ export function QuickSetup() {
                       htmlFor="removeExternalLinks" 
                       className="text-sm font-normal"
                     >
-                      Remove external links
+                      {t('setup.remove-links')}
                     </Label>
                   </div>
                   <div className="flex items-center space-x-2">
@@ -205,17 +207,17 @@ export function QuickSetup() {
                       htmlFor="addWatermark" 
                       className="text-sm font-normal"
                     >
-                      Add custom watermark to images
+                      {t('setup.add-watermark')}
                     </Label>
                   </div>
                 </div>
               </div>
 
               <div>
-                <Label htmlFor="customBranding">Custom Branding</Label>
+                <Label htmlFor="customBranding">{t('setup.custom-branding')}</Label>
                 <Textarea
                   id="customBranding"
-                  placeholder="Add your custom footer text..."
+                  placeholder={t('setup.footer-placeholder')}
                   rows={3}
                   {...register("customBranding")}
                   data-testid="textarea-custom-branding"
@@ -235,7 +237,7 @@ export function QuickSetup() {
               variant="outline"
               data-testid="button-save-draft"
             >
-              Save as Draft
+              {t('setup.save-draft')}
             </Button>
             <Button 
               type="submit" 
@@ -243,11 +245,11 @@ export function QuickSetup() {
               data-testid="button-create-pair"
             >
               {isSubmitting ? (
-                "Creating..."
+                t('setup.creating')
               ) : (
                 <>
                   <Plus className="h-4 w-4 mr-2" />
-                  Create Channel Pair
+                  {t('setup.create-pair')}
                 </>
               )}
             </Button>

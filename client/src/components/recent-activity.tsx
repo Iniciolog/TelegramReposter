@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { 
   CheckCircle, 
   Image, 
@@ -34,12 +35,13 @@ export function RecentActivity() {
     queryKey: ["/api/activity-logs"],
     refetchInterval: 30000, // Refresh every 30 seconds
   });
+  const { t } = useLanguage();
 
   if (isLoading) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Recent Activity</CardTitle>
+          <CardTitle>{t('activity.title')}</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
@@ -61,14 +63,14 @@ export function RecentActivity() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Recent Activity</CardTitle>
+        <CardTitle>{t('activity.title')}</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
           {!activities || activities.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
-              <p>No recent activity.</p>
-              <p className="text-sm">Activity will appear here once you start monitoring channels.</p>
+              <p>{t('activity.no-activity')}</p>
+              <p className="text-sm">{t('activity.will-appear')}</p>
             </div>
           ) : (
             activities.slice(0, 5).map((activity: any) => {
@@ -96,7 +98,7 @@ export function RecentActivity() {
                     >
                       {activity.createdAt 
                         ? formatDistanceToNow(new Date(activity.createdAt), { addSuffix: true })
-                        : "Just now"
+                        : t('common.just-now')
                       }
                     </p>
                   </div>
@@ -113,7 +115,7 @@ export function RecentActivity() {
               className="w-full"
               data-testid="button-view-all-activity"
             >
-              View All Activity
+              {t('activity.view-all')}
             </Button>
           </div>
         )}

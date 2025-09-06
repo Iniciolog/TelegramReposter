@@ -1,7 +1,10 @@
 import { Sidebar } from "@/components/sidebar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 export default function Branding() {
+  const { t } = useLanguage();
+  
   return (
     <div className="flex h-screen bg-background">
       <Sidebar />
@@ -9,9 +12,9 @@ export default function Branding() {
       <div className="flex-1 flex flex-col overflow-hidden">
         <header className="bg-card border-b border-border px-6 py-4">
           <div>
-            <h1 className="text-2xl font-bold">Branding</h1>
+            <h1 className="text-2xl font-bold">{t('pages.branding.title')}</h1>
             <p className="text-muted-foreground">
-              Customize branding and visual elements for your posts
+              {t('pages.branding.subtitle')}
             </p>
           </div>
         </header>
@@ -19,11 +22,11 @@ export default function Branding() {
         <main className="flex-1 overflow-auto p-6">
           <Card>
             <CardHeader>
-              <CardTitle>Brand Settings</CardTitle>
+              <CardTitle>{t('cards.brand-settings')}</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-center py-8 text-muted-foreground">
-                <p>Branding customization interface will be implemented here.</p>
+                <p>{t('placeholder.branding')}</p>
               </div>
             </CardContent>
           </Card>

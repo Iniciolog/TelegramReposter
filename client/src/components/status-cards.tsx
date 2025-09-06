@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { 
   Wifi, 
   Send, 
@@ -13,6 +14,7 @@ export function StatusCards() {
   const { data: stats, isLoading } = useQuery({
     queryKey: ["/api/stats"],
   });
+  const { t } = useLanguage();
 
   if (isLoading) {
     return (
@@ -30,46 +32,46 @@ export function StatusCards() {
 
   const cards = [
     {
-      title: "Active Channels",
+      title: t("stats.active-channels"),
       value: stats?.activeChannels || 0,
       icon: Wifi,
       iconBg: "bg-green-100",
       iconColor: "text-green-600",
       trend: "+2",
-      trendText: "this week",
+      trendText: t("stats.this-week"),
       trendIcon: TrendingUp,
       trendColor: "text-green-600"
     },
     {
-      title: "Posts Today",
+      title: t("stats.posts-today"),
       value: stats?.postsToday || 0,
       icon: Send,
       iconBg: "bg-blue-100",
       iconColor: "text-blue-600",
       trend: "+24%",
-      trendText: "vs yesterday",
+      trendText: t("stats.vs-yesterday"),
       trendIcon: TrendingUp,
       trendColor: "text-green-600"
     },
     {
-      title: "Success Rate",
+      title: t("stats.success-rate"),
       value: `${stats?.successRate || 0}%`,
       icon: CheckCircle,
       iconBg: "bg-green-100",
       iconColor: "text-green-600",
       trend: "+0.3%",
-      trendText: "vs last week",
+      trendText: t("stats.vs-last-week"),
       trendIcon: TrendingUp,
       trendColor: "text-green-600"
     },
     {
-      title: "Errors",
+      title: t("stats.errors"),
       value: stats?.errors || 0,
       icon: AlertTriangle,
       iconBg: "bg-red-100",
       iconColor: "text-red-600",
       trend: "+1",
-      trendText: "since yesterday",
+      trendText: t("stats.since-yesterday"),
       trendIcon: TrendingDown,
       trendColor: "text-red-600"
     },

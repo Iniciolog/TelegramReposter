@@ -5,9 +5,12 @@ import { RecentActivity } from "@/components/recent-activity";
 import { PerformanceChart } from "@/components/performance-chart";
 import { QuickSetup } from "@/components/quick-setup";
 import { Button } from "@/components/ui/button";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { Bell, Plus } from "lucide-react";
 
 export default function Dashboard() {
+  const { t } = useLanguage();
+  
   return (
     <div className="flex h-screen bg-background">
       <Sidebar />
@@ -17,9 +20,9 @@ export default function Dashboard() {
         <header className="bg-card border-b border-border px-6 py-4">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold">Dashboard</h1>
+              <h1 className="text-2xl font-bold">{t('dashboard.title')}</h1>
               <p className="text-muted-foreground">
-                Monitor your Telegram auto-posting activities
+                {t('dashboard.subtitle')}
               </p>
             </div>
             <div className="flex items-center space-x-4">
@@ -34,7 +37,7 @@ export default function Dashboard() {
               </Button>
               <Button data-testid="button-new-channel-pair">
                 <Plus className="h-4 w-4 mr-2" />
-                New Channel Pair
+                {t('dashboard.new-channel-pair')}
               </Button>
             </div>
           </div>
