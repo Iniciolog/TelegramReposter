@@ -22,7 +22,12 @@ import { useToast } from "@/hooks/use-toast";
 import { z } from "zod";
 import { Plus, Search } from "lucide-react";
 
-const formSchema = insertChannelPairSchema.extend({
+const formSchema = insertChannelPairSchema.omit({
+  sourceName: true,
+  targetName: true,
+  sourceSubscribers: true,
+  targetSubscribers: true,
+}).extend({
   removeChannelMentions: z.boolean().optional(),
   removeExternalLinks: z.boolean().optional(),
   addWatermark: z.boolean().optional(),
@@ -90,6 +95,8 @@ export function QuickSetup() {
   });
 
   const onSubmit = (data: FormData) => {
+    console.log('Form submitted with data:', data);
+    console.log('Form errors:', errors);
     createChannelPairMutation.mutate(data);
   };
 
@@ -99,7 +106,9 @@ export function QuickSetup() {
         <CardTitle>{t('setup.title')}</CardTitle>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit(onSubmit)}>
+        <form onSubmit={handleSubmit(onSubmit, (errors) => {
+          console.log('Form validation errors:', errors);
+        })}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-4">
               <div>
@@ -243,6 +252,7 @@ export function QuickSetup() {
               type="submit" 
               disabled={isSubmitting}
               data-testid="button-create-pair"
+              onClick={() => console.log('Button clicked!')}
             >
               {isSubmitting ? (
                 t('setup.creating')
