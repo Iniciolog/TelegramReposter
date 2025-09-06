@@ -85,8 +85,20 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteChannelPair(id: string): Promise<boolean> {
-    const result = await db.delete(channelPairs).where(eq(channelPairs.id, id));
-    return (result.rowCount ?? 0) > 0;
+    try {
+      // First delete related activity logs to avoid foreign key constraint violation
+      await db.delete(activityLogs).where(eq(activityLogs.channelPairId, id));
+      
+      // Then delete related posts
+      await db.delete(posts).where(eq(posts.channelPairId, id));
+      
+      // Finally delete the channel pair
+      const result = await db.delete(channelPairs).where(eq(channelPairs.id, id));
+      return (result.rowCount ?? 0) > 0;
+    } catch (error) {
+      console.error('Error deleting channel pair:', error);
+      return false;
+    }
   }
 
   async getPosts(channelPairId?: string): Promise<Post[]> {

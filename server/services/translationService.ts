@@ -55,8 +55,7 @@ class TranslationService {
             content: text
           }
         ],
-        max_tokens: 50,
-        temperature: 0.1
+        max_completion_tokens: 50
       });
 
       const detectedLanguage = detectionResponse.choices[0]?.message?.content?.toLowerCase().trim() || 'unknown';
@@ -94,8 +93,7 @@ class TranslationService {
             content: text
           }
         ],
-        max_tokens: Math.max(1000, Math.floor(text.length * 1.5)),
-        temperature: 0.3
+        max_completion_tokens: Math.max(1000, Math.floor(text.length * 1.5))
       });
 
       const translatedText = translationResponse.choices[0]?.message?.content?.trim() || text;

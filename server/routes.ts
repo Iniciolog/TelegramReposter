@@ -143,7 +143,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/channel-pairs/:id", async (req, res) => {
     try {
       const { id } = req.params;
+      console.log('Attempting to delete channel pair:', id);
+      
       const success = await storage.deleteChannelPair(id);
+      console.log('Delete result:', success);
       
       if (!success) {
         return res.status(404).json({ message: "Channel pair not found" });
@@ -151,7 +154,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.json({ success: true });
     } catch (error) {
-      res.status(500).json({ message: "Failed to delete channel pair" });
+      console.error('Error deleting channel pair:', error);
+      res.status(500).json({ 
+        message: "Failed to delete channel pair",
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
     }
   });
 
