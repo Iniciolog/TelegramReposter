@@ -116,12 +116,15 @@ export function QuickSetup() {
                 <div className="relative">
                   <Input
                     id="sourceUsername"
-                    placeholder="@source_channel"
+                    placeholder="@любой_публичный_канал"
                     {...register("sourceUsername")}
                     data-testid="input-source-channel"
                   />
                   <Search className="absolute right-3 top-2.5 h-4 w-4 text-muted-foreground" />
                 </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Можно указать любой публичный канал. Права администратора не требуются.
+                </p>
                 {errors.sourceUsername && (
                   <p className="text-sm text-destructive mt-1">
                     {errors.sourceUsername.message}
