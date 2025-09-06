@@ -206,33 +206,59 @@ export class WebChannelParserService {
   private extractMessageMedia(messageElement: cheerio.Cheerio<any>): string[] {
     const media: string[] = [];
     
-    // Extract image URLs from photo wrappers
+    // Extract image URLs from photo wrappers (primary method for photos)
     const photoWraps = messageElement.find('.tgme_widget_message_photo_wrap');
     photoWraps.each((index: number, element: any) => {
       const $elem = cheerio.load(element);
       const style = $elem(element).attr('style');
       if (style) {
         const match = style.match(/background-image:url\('([^']+)'\)/);
-        if (match) {
+        if (match && this.isValidMediaUrl(match[1])) {
           media.push(match[1]);
         }
       }
     });
 
-    // Extract video URLs from video thumbnails
+    // Extract video thumbnails (primary method for videos)
     const videoThumbs = messageElement.find('.tgme_widget_message_video_thumb');
     videoThumbs.each((index: number, element: any) => {
       const $elem = cheerio.load(element);
       const style = $elem(element).attr('style');
       if (style) {
         const match = style.match(/background-image:url\('([^']+)'\)/);
-        if (match) {
+        if (match && this.isValidMediaUrl(match[1])) {
           media.push(match[1]);
         }
       }
     });
 
-    // Extract document/file URLs
+    // Extract grouped media (for multiple images/videos)
+    const groupedMedia = messageElement.find('.tgme_widget_message_grouped_wrap .tgme_widget_message_photo_wrap');
+    groupedMedia.each((index: number, element: any) => {
+      const $elem = cheerio.load(element);
+      const style = $elem(element).attr('style');
+      if (style) {
+        const match = style.match(/background-image:url\('([^']+)'\)/);
+        if (match && this.isValidMediaUrl(match[1])) {
+          media.push(match[1]);
+        }
+      }
+    });
+
+    // Extract link preview images (for external links like YouTube)
+    const linkPreviews = messageElement.find('.tgme_widget_message_link_preview .link_preview_image');
+    linkPreviews.each((index: number, element: any) => {
+      const $elem = cheerio.load(element);
+      const style = $elem(element).attr('style');
+      if (style) {
+        const match = style.match(/background-image:url\('([^']+)'\)/);
+        if (match && this.isValidMediaUrl(match[1])) {
+          media.push(match[1]);
+        }
+      }
+    });
+
+    // Extract document/file URLs (for documents)
     const documents = messageElement.find('.tgme_widget_message_document');
     documents.each((index: number, element: any) => {
       const $elem = cheerio.load(element);
@@ -242,17 +268,47 @@ export class WebChannelParserService {
       }
     });
 
-    // Extract direct image sources
+    // Extract direct image sources as fallback (exclude small/avatar images)
     const images = messageElement.find('img');
     images.each((index: number, element: any) => {
       const $elem = cheerio.load(element);
       const src = $elem(element).attr('src');
-      if (src && !src.includes('emoji')) { // Exclude emoji images
+      if (src && this.isValidMediaUrl(src)) {
         media.push(src);
       }
     });
 
-    return media;
+    return this.deduplicateMedia(media);
+  }
+
+  private isValidMediaUrl(url: string): boolean {
+    // Exclude obvious non-content images
+    if (!url || url.includes('emoji') || url.includes('avatar')) {
+      return false;
+    }
+    
+    // Exclude small profile/channel images (usually avatars)
+    if (url.match(/\.jpg\?.*size.*[1-9][0-9]x[1-9][0-9]$/)) {
+      return false; // Small square images are likely avatars
+    }
+    
+    // Exclude channel/profile photos based on URL patterns
+    if (url.includes('/profile_photos/') || url.includes('/channel_photos/')) {
+      return false;
+    }
+    
+    // Accept telesco.pe CDN images (these are actual content)
+    if (url.includes('telesco.pe') || url.includes('telegram.org')) {
+      return true;
+    }
+    
+    // Accept other external images
+    return true;
+  }
+
+  private deduplicateMedia(media: string[]): string[] {
+    // Remove duplicates and return unique URLs
+    return Array.from(new Set(media));
   }
 
   private async processWebMessage(message: WebMessage, channelPair: ChannelPair): Promise<void> {
