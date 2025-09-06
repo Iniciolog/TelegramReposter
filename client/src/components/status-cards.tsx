@@ -33,7 +33,7 @@ export function StatusCards() {
   const cards = [
     {
       title: t("stats.active-channels"),
-      value: stats?.activeChannels || 0,
+      value: (stats as any)?.activeChannels || 0,
       icon: Wifi,
       iconBg: "bg-green-100",
       iconColor: "text-green-600",
@@ -44,7 +44,7 @@ export function StatusCards() {
     },
     {
       title: t("stats.posts-today"),
-      value: stats?.postsToday || 0,
+      value: (stats as any)?.postsToday || 0,
       icon: Send,
       iconBg: "bg-blue-100",
       iconColor: "text-blue-600",
@@ -55,7 +55,7 @@ export function StatusCards() {
     },
     {
       title: t("stats.success-rate"),
-      value: `${stats?.successRate || 0}%`,
+      value: `${(stats as any)?.successRate || 0}%`,
       icon: CheckCircle,
       iconBg: "bg-green-100",
       iconColor: "text-green-600",
@@ -66,7 +66,7 @@ export function StatusCards() {
     },
     {
       title: t("stats.errors"),
-      value: stats?.errors || 0,
+      value: (stats as any)?.errors || 0,
       icon: AlertTriangle,
       iconBg: "bg-red-100",
       iconColor: "text-red-600",

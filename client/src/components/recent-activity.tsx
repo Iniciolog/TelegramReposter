@@ -67,13 +67,13 @@ export function RecentActivity() {
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
-          {!activities || activities.length === 0 ? (
+          {!activities || (activities as any[])?.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               <p>{t('activity.no-activity')}</p>
               <p className="text-sm">{t('activity.will-appear')}</p>
             </div>
           ) : (
-            activities.slice(0, 5).map((activity: any) => {
+            (activities as any[])?.slice(0, 5).map((activity: any) => {
               const { icon: Icon, color } = getActivityIcon(activity.type);
               
               return (
@@ -108,7 +108,7 @@ export function RecentActivity() {
           )}
         </div>
 
-        {activities && activities.length > 5 && (
+        {activities && (activities as any[])?.length > 5 && (
           <div className="mt-4">
             <Button 
               variant="ghost" 

@@ -88,13 +88,13 @@ export function ChannelPairs() {
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
-          {!channelPairs || channelPairs.length === 0 ? (
+          {!channelPairs || (channelPairs as any[])?.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               <p>{t('channel-pairs.no-pairs')}</p>
               <p className="text-sm">{t('channel-pairs.create-first')}</p>
             </div>
           ) : (
-            channelPairs.map((pair: any) => (
+            (channelPairs as any[])?.map((pair: any) => (
               <div 
                 key={pair.id} 
                 className="flex items-center justify-between p-4 bg-muted rounded-lg"
