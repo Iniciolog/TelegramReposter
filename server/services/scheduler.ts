@@ -190,13 +190,65 @@ export class SchedulerService {
     postId: string,
     delayMinutes: number = 0
   ): Promise<void> {
-    const scheduledAt = new Date();
-    scheduledAt.setMinutes(scheduledAt.getMinutes() + delayMinutes);
+    // If delay is 0, process immediately
+    if (delayMinutes === 0) {
+      try {
+        const post = await storage.getPost(postId);
+        if (!post) {
+          throw new Error(`Post ${postId} not found`);
+        }
 
-    await storage.updatePost(postId, {
-      scheduledAt,
-      status: 'pending',
-    });
+        const channelPair = await storage.getChannelPair(post.channelPairId!);
+        if (!channelPair) {
+          throw new Error(`Channel pair ${post.channelPairId} not found`);
+        }
+
+        if (channelPair.status === 'active') {
+          // Process and send the post immediately
+          await this.sendScheduledPost(post, channelPair);
+
+          // Update post status
+          await storage.updatePost(postId, {
+            status: 'posted',
+            postedAt: new Date(),
+          });
+
+          // Log activity
+          await storage.createActivityLog({
+            type: 'post_sent',
+            description: `Post sent immediately to ${channelPair.targetName}`,
+            channelPairId: channelPair.id,
+            postId: postId,
+          });
+        } else {
+          throw new Error(`Channel pair ${channelPair.id} is not active`);
+        }
+      } catch (error) {
+        console.error(`Failed to send immediate post ${postId}:`, error);
+        
+        await storage.updatePost(postId, {
+          status: 'failed',
+          errorMessage: error instanceof Error ? error.message : 'Unknown error',
+        });
+
+        await storage.createActivityLog({
+          type: 'post_failed',
+          description: `Failed to send immediate post: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          channelPairId: (await storage.getPost(postId))?.channelPairId || null,
+          postId: postId,
+        });
+        throw error;
+      }
+    } else {
+      // Schedule for later processing
+      const scheduledAt = new Date();
+      scheduledAt.setMinutes(scheduledAt.getMinutes() + delayMinutes);
+
+      await storage.updatePost(postId, {
+        scheduledAt,
+        status: 'pending',
+      });
+    }
   }
 }
 
