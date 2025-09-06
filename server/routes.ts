@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { telegramService } from "./services/telegram";
 import { schedulerService } from "./services/scheduler";
+import { channelParserService } from "./services/channelParser";
 import { insertChannelPairSchema, insertSettingsSchema } from "@shared/schema";
 import { z } from "zod";
 
@@ -35,73 +36,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (settings.botToken) {
         await schedulerService.startMonitoring();
         
-        // Start telegram polling for new messages
-        await telegramService.startPolling(async (message) => {
-          console.log('📥 NEW MESSAGE RECEIVED:');
-          console.log('  From channel:', message.chat.username || 'unknown');
-          console.log('  Channel ID:', message.chat.id);
-          console.log('  Message ID:', message.message_id);
-          console.log('  Text:', message.text || message.caption || 'no text');
-          console.log('  Timestamp:', new Date().toISOString());
-          
-          // Handle new message from monitored channels
-          const channelPairs = await storage.getChannelPairs();
-          console.log('📋 Available channel pairs:', channelPairs.map(p => ({ 
-            source: p.sourceUsername, 
-            target: p.targetUsername, 
-            status: p.status 
-          })));
-          
-          const matchingPairs = channelPairs.filter(pair => {
-            // Remove @ symbol for comparison if present
-            const sourceUsername = pair.sourceUsername.replace('@', '');
-            const messageUsername = message.chat.username;
-            
-            const sourceMatch = sourceUsername === messageUsername;
-            console.log(`Checking pair source "${sourceUsername}" against message from "${messageUsername}": ${sourceMatch}`);
-            return sourceMatch && pair.status === 'active';
-          });
-
-          console.log(`Found ${matchingPairs.length} matching pairs for message from ${message.chat.username}`);
-          
-          for (const pair of matchingPairs) {
-            try {
-              console.log(`Processing message for pair: ${pair.sourceName} → ${pair.targetName}`);
-              
-              // Create post record
-              const post = await storage.createPost({
-                channelPairId: pair.id,
-                originalPostId: message.message_id.toString(),
-                content: message.text || message.caption || '',
-                mediaUrls: message.photo ? [message.photo[message.photo.length - 1].file_id] : [],
-                status: 'pending',
-              });
-
-              console.log(`Created post record with ID: ${post.id}`);
-
-              // Schedule the post based on delay settings
-              await schedulerService.schedulePost(post.id, pair.postingDelay || 0);
-
-              // Log activity
-              await storage.createActivityLog({
-                type: 'post_detected',
-                description: `New post detected from ${pair.sourceName}`,
-                channelPairId: pair.id,
-                postId: post.id,
-              });
-
-              console.log(`✅ Scheduled post from ${pair.sourceName} to ${pair.targetName} with ${pair.postingDelay || 0} minute delay`);
-            } catch (error) {
-              console.error(`❌ Error processing message for pair ${pair.id}:`, error);
-              
-              await storage.createActivityLog({
-                type: 'post_failed',
-                description: `Failed to process post from ${pair.sourceName}: ${error}`,
-                channelPairId: pair.id,
-              });
-            }
-          }
-        });
+        // Start channel parsing service for public channels (no admin rights needed)
+        await channelParserService.startParsing();
+        
+        console.log('🚀 Channel monitoring and parsing services started');
       }
       
       res.json(settings);

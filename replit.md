@@ -29,10 +29,11 @@ Preferred communication style: Simple, everyday language.
 
 ### Data Layer
 - **Database**: PostgreSQL with Drizzle ORM
-- **Schema Management**: Drizzle Kit for migrations and schema generation
+- **Schema Management**: Drizzle Kit for migrations and schema generation  
 - **Connection**: Neon Database serverless adapter for PostgreSQL
-- **Storage Pattern**: Repository pattern with in-memory fallback for development
+- **Storage Pattern**: Repository pattern with DatabaseStorage implementation (removed MemStorage)
 - **Data Models**: Channel pairs, posts, activity logs, and global settings
+- **Auto-initialization**: Telegram bot automatically initializes on server startup if settings exist
 
 ### Core Services
 - **Telegram Integration**: Node Telegram Bot API for channel monitoring and posting

@@ -6,9 +6,14 @@ import {
   type ActivityLog,
   type InsertActivityLog,
   type Settings,
-  type InsertSettings
+  type InsertSettings,
+  channelPairs,
+  posts,
+  activityLogs,
+  settings
 } from "@shared/schema";
-import { randomUUID } from "crypto";
+import { db } from "./db";
+import { eq, desc } from "drizzle-orm";
 
 export interface IStorage {
   // Channel Pairs
@@ -41,138 +46,140 @@ export interface IStorage {
   }>;
 }
 
-export class MemStorage implements IStorage {
-  private channelPairs: Map<string, ChannelPair> = new Map();
-  private posts: Map<string, Post> = new Map();
-  private activityLogs: Map<string, ActivityLog> = new Map();
-  private settings: Settings | undefined;
-
+// Database Storage Implementation
+export class DatabaseStorage implements IStorage {
   async getChannelPairs(): Promise<ChannelPair[]> {
-    return Array.from(this.channelPairs.values());
+    return await db.select().from(channelPairs);
   }
 
   async getChannelPair(id: string): Promise<ChannelPair | undefined> {
-    return this.channelPairs.get(id);
+    const [pair] = await db.select().from(channelPairs).where(eq(channelPairs.id, id));
+    return pair || undefined;
   }
 
   async createChannelPair(insertChannelPair: InsertChannelPair): Promise<ChannelPair> {
-    const id = randomUUID();
-    const now = new Date();
-    const channelPair: ChannelPair = {
-      ...insertChannelPair,
-      id,
-      status: insertChannelPair.status || "active",
-      sourceSubscribers: insertChannelPair.sourceSubscribers || null,
-      targetSubscribers: insertChannelPair.targetSubscribers || null,
-      postingDelay: insertChannelPair.postingDelay || null,
-      contentFilters: insertChannelPair.contentFilters || {},
-      customBranding: insertChannelPair.customBranding || null,
-      createdAt: now,
-      updatedAt: now,
-    };
-    this.channelPairs.set(id, channelPair);
-    return channelPair;
+    const [pair] = await db
+      .insert(channelPairs)
+      .values({
+        ...insertChannelPair,
+        status: insertChannelPair.status || 'active',
+        sourceName: insertChannelPair.sourceName || insertChannelPair.sourceUsername,
+        targetName: insertChannelPair.targetName || insertChannelPair.targetUsername,
+        sourceSubscribers: insertChannelPair.sourceSubscribers || 0,
+        targetSubscribers: insertChannelPair.targetSubscribers || 0,
+        postingDelay: insertChannelPair.postingDelay || 0,
+        contentFilters: insertChannelPair.contentFilters || {},
+        customBranding: insertChannelPair.customBranding || null,
+      })
+      .returning();
+    return pair;
   }
 
   async updateChannelPair(id: string, updates: Partial<InsertChannelPair>): Promise<ChannelPair | undefined> {
-    const channelPair = this.channelPairs.get(id);
-    if (!channelPair) return undefined;
-
-    const updatedChannelPair = {
-      ...channelPair,
-      ...updates,
-      updatedAt: new Date(),
-    };
-    this.channelPairs.set(id, updatedChannelPair);
-    return updatedChannelPair;
+    const [pair] = await db
+      .update(channelPairs)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(channelPairs.id, id))
+      .returning();
+    return pair || undefined;
   }
 
   async deleteChannelPair(id: string): Promise<boolean> {
-    return this.channelPairs.delete(id);
+    const result = await db.delete(channelPairs).where(eq(channelPairs.id, id));
+    return (result.rowCount ?? 0) > 0;
   }
 
   async getPosts(channelPairId?: string): Promise<Post[]> {
-    let posts = Array.from(this.posts.values());
     if (channelPairId) {
-      posts = posts.filter(post => post.channelPairId === channelPairId);
+      return await db.select().from(posts).where(eq(posts.channelPairId, channelPairId));
     }
-    return posts.sort((a, b) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime());
+    return await db.select().from(posts);
   }
 
   async getPost(id: string): Promise<Post | undefined> {
-    return this.posts.get(id);
+    const [post] = await db.select().from(posts).where(eq(posts.id, id));
+    return post || undefined;
   }
 
   async createPost(insertPost: InsertPost): Promise<Post> {
-    const id = randomUUID();
-    const post: Post = {
-      ...insertPost,
-      id,
-      status: insertPost.status || "pending",
-      channelPairId: insertPost.channelPairId || null,
-      repostedPostId: insertPost.repostedPostId || null,
-      content: insertPost.content || null,
-      mediaUrls: insertPost.mediaUrls || [],
-      errorMessage: insertPost.errorMessage || null,
-      scheduledAt: insertPost.scheduledAt || null,
-      postedAt: insertPost.postedAt || null,
-      createdAt: new Date(),
-    };
-    this.posts.set(id, post);
+    const [post] = await db
+      .insert(posts)
+      .values({
+        ...insertPost,
+        status: insertPost.status || 'pending',
+        content: insertPost.content || null,
+        mediaUrls: insertPost.mediaUrls || [],
+        errorMessage: insertPost.errorMessage || null,
+        scheduledAt: insertPost.scheduledAt || null,
+        postedAt: insertPost.postedAt || null,
+        repostedPostId: insertPost.repostedPostId || null,
+      })
+      .returning();
     return post;
   }
 
   async updatePost(id: string, updates: Partial<InsertPost>): Promise<Post | undefined> {
-    const post = this.posts.get(id);
-    if (!post) return undefined;
-
-    const updatedPost = {
-      ...post,
-      ...updates,
-    };
-    this.posts.set(id, updatedPost);
-    return updatedPost;
+    const [post] = await db
+      .update(posts)
+      .set(updates)
+      .where(eq(posts.id, id))
+      .returning();
+    return post || undefined;
   }
 
-  async getActivityLogs(limit: number = 50): Promise<ActivityLog[]> {
-    const logs = Array.from(this.activityLogs.values());
-    return logs
-      .sort((a, b) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime())
-      .slice(0, limit);
+  async getActivityLogs(limit?: number): Promise<ActivityLog[]> {
+    const logs = await db.select().from(activityLogs).orderBy(desc(activityLogs.createdAt)).limit(limit || 50);
+    return logs;
   }
 
   async createActivityLog(insertLog: InsertActivityLog): Promise<ActivityLog> {
-    const id = randomUUID();
-    const log: ActivityLog = {
-      ...insertLog,
-      id,
-      channelPairId: insertLog.channelPairId || null,
-      postId: insertLog.postId || null,
-      metadata: insertLog.metadata || {},
-      createdAt: new Date(),
-    };
-    this.activityLogs.set(id, log);
+    const [log] = await db
+      .insert(activityLogs)
+      .values({
+        ...insertLog,
+        channelPairId: insertLog.channelPairId || null,
+        postId: insertLog.postId || null,
+        metadata: insertLog.metadata || {},
+      })
+      .returning();
     return log;
   }
 
   async getSettings(): Promise<Settings | undefined> {
-    return this.settings;
+    const [setting] = await db.select().from(settings).limit(1);
+    return setting || undefined;
   }
 
   async updateSettings(insertSettings: InsertSettings): Promise<Settings> {
-    const id = this.settings?.id || randomUUID();
-    const now = new Date();
-    this.settings = {
-      ...insertSettings,
-      id,
-      botToken: insertSettings.botToken || null,
-      globalFilters: insertSettings.globalFilters || {},
-      defaultBranding: insertSettings.defaultBranding || null,
-      notificationSettings: insertSettings.notificationSettings || {},
-      createdAt: this.settings?.createdAt || now,
-      updatedAt: now,
-    };
-    return this.settings;
+    const existingSettings = await this.getSettings();
+    
+    if (existingSettings) {
+      const [updated] = await db
+        .update(settings)
+        .set({
+          ...insertSettings,
+          botToken: insertSettings.botToken || null,
+          globalFilters: insertSettings.globalFilters || {},
+          defaultBranding: insertSettings.defaultBranding || null,
+          notificationSettings: insertSettings.notificationSettings || {},
+          updatedAt: new Date(),
+        })
+        .where(eq(settings.id, existingSettings.id))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await db
+        .insert(settings)
+        .values({
+          ...insertSettings,
+          botToken: insertSettings.botToken || null,
+          globalFilters: insertSettings.globalFilters || {},
+          defaultBranding: insertSettings.defaultBranding || null,
+          notificationSettings: insertSettings.notificationSettings || {},
+        })
+        .returning();
+      return created;
+    }
   }
 
   async getStats(): Promise<{
@@ -207,4 +214,4 @@ export class MemStorage implements IStorage {
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();

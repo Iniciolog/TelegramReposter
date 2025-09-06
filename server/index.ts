@@ -56,6 +56,57 @@ app.use((req, res, next) => {
     serveStatic(app);
   }
 
+  // Initialize Telegram bot if settings exist
+  try {
+    const { storage } = await import("./storage");
+    const { telegramService } = await import("./services/telegram");
+    
+    const settings = await storage.getSettings();
+    if (settings?.botToken) {
+      const success = await telegramService.initializeBot(settings.botToken);
+      if (success) {
+        await telegramService.startPolling(async (message) => {
+          // Handle new message from monitored channels
+          const channelPairs = await storage.getChannelPairs();
+          
+          const matchingPairs = channelPairs.filter(pair => {
+            // Remove @ symbol for comparison if present
+            const sourceUsername = pair.sourceUsername.replace('@', '');
+            const messageUsername = message.chat.username;
+            
+            const sourceMatch = sourceUsername === messageUsername;
+            return sourceMatch && pair.status === 'active';
+          });
+          
+          for (const pair of matchingPairs) {
+            try {
+              // Create post record
+              const post = await storage.createPost({
+                channelPairId: pair.id,
+                originalPostId: message.message_id.toString(),
+                content: message.text || message.caption || '',
+                mediaUrls: message.photo ? [message.photo[message.photo.length - 1].file_id] : [],
+                status: 'pending',
+              });
+
+              // Log activity
+              await storage.createActivityLog({
+                type: 'post_detected',
+                description: `New post detected from ${pair.sourceName}`,
+                channelPairId: pair.id,
+                postId: post.id,
+              });
+            } catch (error) {
+              log("Error processing message:", String(error));
+            }
+          }
+        });
+      }
+    }
+  } catch (error) {
+    log("Failed to auto-initialize bot:", String(error));
+  }
+
   // ALWAYS serve the app on the port specified in the environment variable PORT
   // Other ports are firewalled. Default to 5000 if not specified.
   // this serves both the API and the client.
