@@ -120,7 +120,7 @@ export class SchedulerService {
         
         if (channelPair.contentFilters?.addWatermark || channelPair.contentFilters?.removeOriginalBranding) {
           // Get the file from Telegram
-          const fileStream = await telegramService.bot?.getFileStream(post.mediaUrls[0]);
+          const fileStream = await telegramService.getBot()?.getFileStream(post.mediaUrls[0]);
           
           if (fileStream) {
             // Collect buffer from stream

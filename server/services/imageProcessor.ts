@@ -128,7 +128,7 @@ export class ImageProcessor {
   async removeExifData(inputBuffer: Buffer): Promise<Buffer> {
     try {
       return await sharp(inputBuffer)
-        .withMetadata(false)
+        .withMetadata({})
         .toBuffer();
     } catch (error) {
       console.error('Error removing EXIF data:', error);

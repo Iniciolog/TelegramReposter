@@ -5,6 +5,10 @@ export class TelegramService {
   private botToken: string | null = null;
   private isPolling = false;
 
+  getBot(): TelegramBot | null {
+    return this.bot;
+  }
+
   async initializeBot(token: string): Promise<boolean> {
     try {
       this.botToken = token;
@@ -19,18 +23,18 @@ export class TelegramService {
     }
   }
 
-  async startPolling(onNewMessage: (message: any) => void): Promise<void> {
+  async startPolling(onNewMessage: (message: TelegramBot.Message) => void): Promise<void> {
     if (!this.bot || this.isPolling) return;
 
     this.isPolling = true;
     this.bot.startPolling();
     
-    this.bot.on('channel_post', (message) => {
+    this.bot.on('channel_post', (message: TelegramBot.Message) => {
       console.log('New channel post detected:', message);
       onNewMessage(message);
     });
 
-    this.bot.on('message', (message) => {
+    this.bot.on('message', (message: TelegramBot.Message) => {
       if (message.chat.type === 'channel') {
         console.log('New channel message detected:', message);
         onNewMessage(message);
