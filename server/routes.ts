@@ -37,10 +37,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         // Start telegram polling for new messages
         await telegramService.startPolling(async (message) => {
+          console.log('📥 NEW MESSAGE RECEIVED:');
+          console.log('  From channel:', message.chat.username || 'unknown');
+          console.log('  Channel ID:', message.chat.id);
+          console.log('  Message ID:', message.message_id);
+          console.log('  Text:', message.text || message.caption || 'no text');
+          console.log('  Timestamp:', new Date().toISOString());
+          
           // Handle new message from monitored channels
           const channelPairs = await storage.getChannelPairs();
-          console.log('Checking message from:', message.chat.username, message.chat.id);
-          console.log('Available channel pairs:', channelPairs.map(p => ({ 
+          console.log('📋 Available channel pairs:', channelPairs.map(p => ({ 
             source: p.sourceUsername, 
             target: p.targetUsername, 
             status: p.status 

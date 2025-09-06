@@ -27,21 +27,44 @@ export class TelegramService {
     if (!this.bot || this.isPolling) return;
 
     this.isPolling = true;
-    this.bot.startPolling();
+    
+    // Add error handler before starting polling
+    this.bot.on('polling_error', (error) => {
+      console.error('❌ Polling error:', error);
+    });
     
     this.bot.on('channel_post', (message: TelegramBot.Message) => {
-      console.log('New channel post detected:', message);
+      console.log('🔔 CHANNEL POST EVENT:', {
+        chat_username: message.chat.username,
+        chat_id: message.chat.id,
+        message_id: message.message_id,
+        text: message.text || message.caption || 'no text'
+      });
       onNewMessage(message);
     });
 
     this.bot.on('message', (message: TelegramBot.Message) => {
-      if (message.chat.type === 'channel') {
-        console.log('New channel message detected:', message);
-        onNewMessage(message);
-      }
+      console.log('💬 MESSAGE EVENT:', {
+        chat_username: message.chat.username,
+        chat_id: message.chat.id,
+        chat_type: message.chat.type,
+        message_id: message.message_id,
+        text: message.text || message.caption || 'no text'
+      });
+      // Process all messages, not just channel type
+      onNewMessage(message);
     });
 
-    console.log('Telegram bot polling started');
+    this.bot.startPolling();
+    console.log('🤖 Telegram bot polling started');
+    
+    // Test bot connection
+    try {
+      const botInfo = await this.bot.getMe();
+      console.log('✅ Bot connected successfully:', botInfo.username);
+    } catch (error) {
+      console.error('❌ Bot connection test failed:', error);
+    }
   }
 
   async stopPolling(): Promise<void> {
