@@ -58,12 +58,7 @@ class TranslationService {
         max_completion_tokens: 200
       });
 
-      console.log('🔍 Full OpenAI response:', JSON.stringify(detectionResponse, null, 2));
-      
       const detectedLanguage = detectionResponse.choices[0]?.message?.content?.toLowerCase().trim() || 'unknown';
-      
-      console.log('🔍 Raw OpenAI detection response:', JSON.stringify(detectionResponse.choices[0]?.message?.content));
-      console.log('🔍 Processed detected language:', detectedLanguage);
 
       // If already Russian or language unknown, return as is
       if (detectedLanguage === 'russian' || detectedLanguage === 'unknown') {
