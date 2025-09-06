@@ -52,6 +52,7 @@ export function QuickSetup() {
     defaultValues: {
       postingDelay: 0,
       status: "active",
+      copyMode: "auto",
       contentFilters: {},
       removeChannelMentions: true,
       removeExternalLinks: true,
@@ -167,6 +168,26 @@ export function QuickSetup() {
                     <SelectItem value="60">1 {t('setup.hour')}</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="copyMode">Режим копирования</Label>
+                <Select 
+                  value={watch("copyMode")} 
+                  onValueChange={(value) => setValue("copyMode", value as "auto" | "draft" | "both")}
+                >
+                  <SelectTrigger data-testid="select-copy-mode">
+                    <SelectValue placeholder="Выберите режим копирования" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="auto">Автопубликация</SelectItem>
+                    <SelectItem value="draft">Только черновики</SelectItem>
+                    <SelectItem value="both">Автопубликация + черновики</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Автопубликация - посты публикуются автоматически. Черновики - посты сохраняются для ручного редактирования.
+                </p>
               </div>
             </div>
 
