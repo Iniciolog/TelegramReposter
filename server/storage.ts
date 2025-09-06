@@ -16,7 +16,7 @@ import {
   scheduledPosts
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, lte, and } from "drizzle-orm";
+import { eq, desc, lte, and, sql } from "drizzle-orm";
 
 export interface IStorage {
   // Channel Pairs
@@ -29,6 +29,8 @@ export interface IStorage {
   // Posts
   getPosts(channelPairId?: string): Promise<Post[]>;
   getPost(id: string): Promise<Post | undefined>;
+  getPostByOriginalId(originalPostId: string, channelPairId: string): Promise<Post | undefined>;
+  getMaxProcessedPostId(channelPairId: string): Promise<number>;
   createPost(post: InsertPost): Promise<Post>;
   updatePost(id: string, post: Partial<InsertPost>): Promise<Post | undefined>;
   
@@ -148,6 +150,31 @@ export class DatabaseStorage implements IStorage {
       .where(eq(posts.id, id))
       .returning();
     return post || undefined;
+  }
+
+  async getPostByOriginalId(originalPostId: string, channelPairId: string): Promise<Post | undefined> {
+    const [post] = await db
+      .select()
+      .from(posts)
+      .where(
+        and(
+          eq(posts.originalPostId, originalPostId),
+          eq(posts.channelPairId, channelPairId)
+        )
+      );
+    return post || undefined;
+  }
+
+  async getMaxProcessedPostId(channelPairId: string): Promise<number> {
+    const result = await db
+      .select({
+        maxId: sql<string>`MAX(CAST(${posts.originalPostId} AS INTEGER))`
+      })
+      .from(posts)
+      .where(eq(posts.channelPairId, channelPairId));
+    
+    const maxId = result[0]?.maxId;
+    return maxId ? parseInt(maxId) : 0;
   }
 
   async getActivityLogs(limit?: number): Promise<ActivityLog[]> {
