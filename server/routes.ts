@@ -4,6 +4,7 @@ import { storage } from "./storage";
 import { telegramService } from "./services/telegram";
 import { schedulerService } from "./services/scheduler";
 import { channelParserService } from "./services/channelParser";
+import { webChannelParserService } from "./services/webChannelParser";
 import { insertChannelPairSchema, insertSettingsSchema } from "@shared/schema";
 import { z } from "zod";
 
@@ -39,7 +40,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Start channel parsing service for public channels (no admin rights needed)
         await channelParserService.startParsing();
         
-        console.log('🚀 Channel monitoring and parsing services started');
+        // Start web parsing service for truly public channels
+        await webChannelParserService.startParsing();
+        
+        console.log('🚀 Channel monitoring, parsing and web scraping services started');
       }
       
       res.json(settings);
