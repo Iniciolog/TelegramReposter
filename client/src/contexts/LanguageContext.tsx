@@ -16,6 +16,7 @@ const translations: Translations = {
   'nav.content-filters': { en: 'Content Filters', ru: 'Фильтры контента' },
   'nav.branding': { en: 'Branding', ru: 'Брендинг' },
   'nav.scheduler': { en: 'Scheduler', ru: 'Планировщик' },
+  'nav.drafts': { en: 'Drafts', ru: 'Черновики' },
   'nav.analytics': { en: 'Analytics', ru: 'Аналитика' },
   'nav.activity-logs': { en: 'Activity Logs', ru: 'Журнал активности' },
   'nav.settings': { en: 'Settings', ru: 'Настройки' },

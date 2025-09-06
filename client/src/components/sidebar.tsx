@@ -10,7 +10,8 @@ import {
   Activity,
   User,
   LogOut,
-  Wifi
+  Wifi,
+  FileText
 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { LanguageSwitcher } from "./language-switcher";
@@ -40,6 +41,11 @@ const navigation = [
     name: "nav.scheduler",
     href: "/scheduler",
     icon: Clock,
+  },
+  {
+    name: "nav.drafts",
+    href: "/drafts",
+    icon: FileText,
   },
   {
     name: "nav.analytics",
