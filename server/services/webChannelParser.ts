@@ -1,7 +1,16 @@
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
 import * as cheerio from 'cheerio';
 import { storage } from '../storage';
 import { schedulerService } from './scheduler';
+import type { ChannelPair } from '../../shared/schema';
+
+interface WebMessage {
+  messageId: number;
+  text: string;
+  time: Date | null;
+  media: string[];
+  channelUsername: string;
+}
 
 export class WebChannelParserService {
   private parsingInterval: NodeJS.Timeout | null = null;
@@ -48,12 +57,13 @@ export class WebChannelParserService {
         // Add delay between channels to be polite
         await new Promise(resolve => setTimeout(resolve, 2000));
       }
-    } catch (error) {
-      console.error('❌ Error in web parseAllChannels:', error);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error('❌ Error in web parseAllChannels:', errorMessage);
     }
   }
 
-  private async parseChannelWeb(channelPair: any): Promise<void> {
+  private async parseChannelWeb(channelPair: ChannelPair): Promise<void> {
     try {
       const sourceUsername = channelPair.sourceUsername.replace('@', '');
       
@@ -93,18 +103,19 @@ export class WebChannelParserService {
         await new Promise(resolve => setTimeout(resolve, 500));
       }
 
-    } catch (error) {
-      console.error(`❌ Error web parsing channel ${channelPair.sourceUsername}:`, error);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error(`❌ Error web parsing channel ${channelPair.sourceUsername}:`, errorMessage);
       
       await storage.createActivityLog({
         type: 'web_parsing_error',
-        description: `Failed to web parse channel ${channelPair.sourceName}: ${error}`,
+        description: `Failed to web parse channel ${channelPair.sourceName}: ${errorMessage}`,
         channelPairId: channelPair.id,
       });
     }
   }
 
-  private async getChannelMessagesWeb(channelUsername: string): Promise<any[]> {
+  private async getChannelMessagesWeb(channelUsername: string): Promise<WebMessage[]> {
     try {
       const url = `https://t.me/s/${channelUsername}`;
       console.log(`🌐 Fetching: ${url}`);
@@ -122,9 +133,9 @@ export class WebChannelParserService {
       });
 
       const $ = cheerio.load(response.data);
-      const messages: any[] = [];
+      const messages: WebMessage[] = [];
 
-      $('.tgme_widget_message').each((index, element) => {
+      $('.tgme_widget_message').each((index: number, element: any) => {
         const messageElement = $(element);
         const messageId = this.extractMessageId(messageElement);
         const text = this.extractMessageText(messageElement);
@@ -145,17 +156,18 @@ export class WebChannelParserService {
       console.log(`📋 Extracted ${messages.length} messages from ${channelUsername}`);
       return messages.sort((a, b) => a.messageId - b.messageId);
 
-    } catch (error) {
+    } catch (error: unknown) {
       if (axios.isAxiosError(error)) {
         console.error(`🌐 HTTP Error ${error.response?.status}: ${error.message}`);
       } else {
-        console.error(`🌐 Web parsing error for ${channelUsername}:`, error);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error(`🌐 Web parsing error for ${channelUsername}:`, errorMessage);
       }
       return [];
     }
   }
 
-  private extractMessageId(messageElement: any): number | null {
+  private extractMessageId(messageElement: cheerio.Cheerio<any>): number | null {
     const dataPost = messageElement.attr('data-post');
     if (dataPost) {
       const parts = dataPost.split('/');
@@ -165,7 +177,7 @@ export class WebChannelParserService {
     return null;
   }
 
-  private extractMessageText(messageElement: any): string {
+  private extractMessageText(messageElement: cheerio.Cheerio<any>): string {
     const textElement = messageElement.find('.tgme_widget_message_text');
     if (textElement.length > 0) {
       // Get text content, preserving line breaks
@@ -174,7 +186,7 @@ export class WebChannelParserService {
     return '';
   }
 
-  private extractMessageTime(messageElement: any): Date | null {
+  private extractMessageTime(messageElement: cheerio.Cheerio<any>): Date | null {
     const timeElement = messageElement.find('.tgme_widget_message_date time');
     if (timeElement.length > 0) {
       const datetime = timeElement.attr('datetime');
@@ -183,12 +195,14 @@ export class WebChannelParserService {
     return null;
   }
 
-  private extractMessageMedia(messageElement: any): string[] {
+  private extractMessageMedia(messageElement: cheerio.Cheerio<any>): string[] {
     const media: string[] = [];
     
-    // Extract image URLs
-    messageElement.find('.tgme_widget_message_photo_wrap').each((_, element) => {
-      const style = messageElement.find(element).attr('style');
+    // Extract image URLs from photo wrappers
+    const photoWraps = messageElement.find('.tgme_widget_message_photo_wrap');
+    photoWraps.each((index: number, element: any) => {
+      const $elem = messageElement.constructor(element);
+      const style = $elem.attr('style');
       if (style) {
         const match = style.match(/background-image:url\('([^']+)'\)/);
         if (match) {
@@ -197,21 +211,43 @@ export class WebChannelParserService {
       }
     });
 
-    // Extract video URLs
-    messageElement.find('.tgme_widget_message_video_thumb').each((_, element) => {
-      const style = messageElement.find(element).attr('style');
+    // Extract video URLs from video thumbnails
+    const videoThumbs = messageElement.find('.tgme_widget_message_video_thumb');
+    videoThumbs.each((index: number, element: any) => {
+      const $elem = messageElement.constructor(element);
+      const style = $elem.attr('style');
       if (style) {
         const match = style.match(/background-image:url\('([^']+)'\)/);
         if (match) {
           media.push(match[1]);
         }
+      }
+    });
+
+    // Extract document/file URLs
+    const documents = messageElement.find('.tgme_widget_message_document');
+    documents.each((index: number, element: any) => {
+      const $elem = messageElement.constructor(element);
+      const href = $elem.find('a').attr('href');
+      if (href) {
+        media.push(href);
+      }
+    });
+
+    // Extract direct image sources
+    const images = messageElement.find('img');
+    images.each((index: number, element: any) => {
+      const $elem = messageElement.constructor(element);
+      const src = $elem.attr('src');
+      if (src && !src.includes('emoji')) { // Exclude emoji images
+        media.push(src);
       }
     });
 
     return media;
   }
 
-  private async processWebMessage(message: any, channelPair: any): Promise<void> {
+  private async processWebMessage(message: WebMessage, channelPair: ChannelPair): Promise<void> {
     try {
       console.log(`📝 Processing web message ${message.messageId} from ${channelPair.sourceName}`);
       
@@ -239,12 +275,13 @@ export class WebChannelParserService {
 
       console.log(`🎯 Scheduled web post from ${channelPair.sourceName} to ${channelPair.targetName}`);
 
-    } catch (error) {
-      console.error(`❌ Error processing web message:`, error);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error(`❌ Error processing web message:`, errorMessage);
       
       await storage.createActivityLog({
         type: 'web_post_failed',
-        description: `Failed to process web message: ${error}`,
+        description: `Failed to process web message: ${errorMessage}`,
         channelPairId: channelPair.id,
       });
     }
