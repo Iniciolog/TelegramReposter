@@ -61,6 +61,12 @@ export class MemStorage implements IStorage {
     const channelPair: ChannelPair = {
       ...insertChannelPair,
       id,
+      status: insertChannelPair.status || "active",
+      sourceSubscribers: insertChannelPair.sourceSubscribers || null,
+      targetSubscribers: insertChannelPair.targetSubscribers || null,
+      postingDelay: insertChannelPair.postingDelay || null,
+      contentFilters: insertChannelPair.contentFilters || {},
+      customBranding: insertChannelPair.customBranding || null,
       createdAt: now,
       updatedAt: now,
     };
@@ -102,6 +108,14 @@ export class MemStorage implements IStorage {
     const post: Post = {
       ...insertPost,
       id,
+      status: insertPost.status || "pending",
+      channelPairId: insertPost.channelPairId || null,
+      repostedPostId: insertPost.repostedPostId || null,
+      content: insertPost.content || null,
+      mediaUrls: insertPost.mediaUrls || [],
+      errorMessage: insertPost.errorMessage || null,
+      scheduledAt: insertPost.scheduledAt || null,
+      postedAt: insertPost.postedAt || null,
       createdAt: new Date(),
     };
     this.posts.set(id, post);
@@ -132,6 +146,9 @@ export class MemStorage implements IStorage {
     const log: ActivityLog = {
       ...insertLog,
       id,
+      channelPairId: insertLog.channelPairId || null,
+      postId: insertLog.postId || null,
+      metadata: insertLog.metadata || {},
       createdAt: new Date(),
     };
     this.activityLogs.set(id, log);
@@ -148,6 +165,10 @@ export class MemStorage implements IStorage {
     this.settings = {
       ...insertSettings,
       id,
+      botToken: insertSettings.botToken || null,
+      globalFilters: insertSettings.globalFilters || {},
+      defaultBranding: insertSettings.defaultBranding || null,
+      notificationSettings: insertSettings.notificationSettings || {},
       createdAt: this.settings?.createdAt || now,
       updatedAt: now,
     };

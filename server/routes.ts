@@ -39,10 +39,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await telegramService.startPolling(async (message) => {
           // Handle new message from monitored channels
           const channelPairs = await storage.getChannelPairs();
-          const matchingPairs = channelPairs.filter(pair => 
-            pair.sourceUsername === `@${message.chat.username}` && 
-            pair.status === 'active'
-          );
+          console.log('Checking message from:', message.chat.username, message.chat.id);
+          console.log('Available channel pairs:', channelPairs.map(p => ({ 
+            source: p.sourceUsername, 
+            target: p.targetUsername, 
+            status: p.status 
+          })));
+          
+          const matchingPairs = channelPairs.filter(pair => {
+            const sourceMatch = pair.sourceUsername === `@${message.chat.username}` || 
+                              pair.sourceUsername === message.chat.username;
+            console.log(`Checking pair ${pair.sourceUsername} against @${message.chat.username}: ${sourceMatch}`);
+            return sourceMatch && pair.status === 'active';
+          });
 
           for (const pair of matchingPairs) {
             try {
