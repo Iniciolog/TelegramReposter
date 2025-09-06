@@ -142,10 +142,10 @@ export class WebChannelParserService {
         const time = this.extractMessageTime(messageElement);
         const media = this.extractMessageMedia(messageElement);
 
-        if (messageId && text) {
+        if (messageId && (text || media.length > 0)) {
           messages.push({
             messageId,
-            text,
+            text: text || '',
             time,
             media,
             channelUsername,
@@ -154,6 +154,14 @@ export class WebChannelParserService {
       });
 
       console.log(`📋 Extracted ${messages.length} messages from ${channelUsername}`);
+      
+      // Log first few messages for debugging
+      if (messages.length > 0) {
+        console.log(`🔍 First message: ID=${messages[0].messageId}, text="${messages[0].text?.slice(0, 100)}..."`);
+      } else {
+        console.log(`🔍 No messages found. DOM elements found: ${$('.tgme_widget_message').length}`);
+      }
+      
       return messages.sort((a, b) => a.messageId - b.messageId);
 
     } catch (error: unknown) {
@@ -201,8 +209,8 @@ export class WebChannelParserService {
     // Extract image URLs from photo wrappers
     const photoWraps = messageElement.find('.tgme_widget_message_photo_wrap');
     photoWraps.each((index: number, element: any) => {
-      const $elem = messageElement.constructor(element);
-      const style = $elem.attr('style');
+      const $elem = cheerio.load(element);
+      const style = $elem(element).attr('style');
       if (style) {
         const match = style.match(/background-image:url\('([^']+)'\)/);
         if (match) {
@@ -214,8 +222,8 @@ export class WebChannelParserService {
     // Extract video URLs from video thumbnails
     const videoThumbs = messageElement.find('.tgme_widget_message_video_thumb');
     videoThumbs.each((index: number, element: any) => {
-      const $elem = messageElement.constructor(element);
-      const style = $elem.attr('style');
+      const $elem = cheerio.load(element);
+      const style = $elem(element).attr('style');
       if (style) {
         const match = style.match(/background-image:url\('([^']+)'\)/);
         if (match) {
@@ -227,8 +235,8 @@ export class WebChannelParserService {
     // Extract document/file URLs
     const documents = messageElement.find('.tgme_widget_message_document');
     documents.each((index: number, element: any) => {
-      const $elem = messageElement.constructor(element);
-      const href = $elem.find('a').attr('href');
+      const $elem = cheerio.load(element);
+      const href = $elem(element).find('a').attr('href');
       if (href) {
         media.push(href);
       }
@@ -237,8 +245,8 @@ export class WebChannelParserService {
     // Extract direct image sources
     const images = messageElement.find('img');
     images.each((index: number, element: any) => {
-      const $elem = messageElement.constructor(element);
-      const src = $elem.attr('src');
+      const $elem = cheerio.load(element);
+      const src = $elem(element).attr('src');
       if (src && !src.includes('emoji')) { // Exclude emoji images
         media.push(src);
       }
