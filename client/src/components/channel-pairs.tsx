@@ -10,7 +10,8 @@ import {
   MoreVertical, 
   Play, 
   Pause,
-  Circle
+  Circle,
+  Languages
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -28,6 +29,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Switch } from "@/components/ui/switch";
 
 export function ChannelPairs() {
   const { data: channelPairs, isLoading } = useQuery({
@@ -85,6 +87,27 @@ export function ChannelPairs() {
     },
   });
   
+  // Auto-translate toggle mutation
+  const toggleAutoTranslateMutation = useMutation({
+    mutationFn: async ({ pairId, autoTranslate }: { pairId: string; autoTranslate: boolean }) => {
+      await apiRequest("PUT", `/api/channel-pairs/${pairId}`, { autoTranslate });
+    },
+    onSuccess: (_, { autoTranslate }) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/channel-pairs"] });
+      toast({
+        title: autoTranslate ? "Автоперевод включен" : "Автоперевод отключен",
+        description: autoTranslate ? "Тексты будут автоматически переводиться на русский" : "Автоматический перевод отключен",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        variant: "destructive",
+        title: "Ошибка настройки автоперевода",
+        description: error.message || "Не удалось изменить настройку автоперевода",
+      });
+    },
+  });
+  
   const handleDeleteClick = (pair: any) => {
     setPairToDelete(pair);
     setDeleteDialogOpen(true);
@@ -99,6 +122,11 @@ export function ChannelPairs() {
   const handleToggleStatus = (pair: any) => {
     const newStatus = pair.status === "active" ? "paused" : "active";
     toggleStatusMutation.mutate({ pairId: pair.id, newStatus });
+  };
+  
+  const handleToggleAutoTranslate = (pair: any) => {
+    const newAutoTranslate = !pair.autoTranslate;
+    toggleAutoTranslateMutation.mutate({ pairId: pair.id, autoTranslate: newAutoTranslate });
   };
 
   if (isLoading) {
@@ -208,6 +236,20 @@ export function ChannelPairs() {
                     <div className={`w-2 h-2 ${getStatusDot(pair.status)} rounded-full`}></div>
                     <span className="text-sm text-muted-foreground capitalize">
                       {t(`channel-pairs.${pair.status}`)}
+                    </span>
+                  </div>
+                  
+                  {/* Auto-translate toggle */}
+                  <div className="flex items-center space-x-2">
+                    <Languages className="h-4 w-4 text-muted-foreground" />
+                    <Switch
+                      checked={pair.autoTranslate || false}
+                      onCheckedChange={() => handleToggleAutoTranslate(pair)}
+                      disabled={toggleAutoTranslateMutation.isPending}
+                      data-testid={`switch-autotranslate-${pair.id}`}
+                    />
+                    <span className="text-xs text-muted-foreground">
+                      {pair.autoTranslate ? "Автоперевод" : "Перевод выкл"}
                     </span>
                   </div>
                   <DropdownMenu>

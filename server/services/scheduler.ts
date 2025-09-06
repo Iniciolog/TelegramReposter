@@ -2,6 +2,7 @@ import * as cron from 'node-cron';
 import { storage } from '../storage';
 import { telegramService } from './telegram';
 import { imageProcessor } from './imageProcessor';
+import { translationService } from './translationService';
 
 export class SchedulerService {
   private jobs: Map<string, cron.ScheduledTask> = new Map();
@@ -99,6 +100,42 @@ export class SchedulerService {
     
     // Remove the placeholder text that appears when media is not available (critical fix)
     content = content.replace(/📸\s*\[Медиа доступно в исходном канале\]/gi, '');
+    
+    // Apply translation if enabled for this channel pair
+    if (channelPair.autoTranslate && content.length > 0) {
+      try {
+        const translationResult = await translationService.translateToRussian(content);
+        
+        if (translationResult.wasTranslated) {
+          content = translationResult.translatedText;
+          
+          // Log translation activity
+          await storage.createActivityLog({
+            type: 'content_translated',
+            description: `Content translated from ${translationResult.detectedLanguage} to Russian`,
+            channelPairId: post.channelPairId!,
+            postId: post.id,
+            metadata: {
+              originalLanguage: translationResult.detectedLanguage,
+              originalLength: translationResult.originalText.length,
+              translatedLength: translationResult.translatedText.length
+            }
+          });
+          
+          console.log(`🌐 Translated ${translationResult.detectedLanguage} → Russian for post ${post.id}`);
+        }
+      } catch (error) {
+        console.error(`❌ Translation failed for post ${post.id}:`, error);
+        
+        // Log translation failure but continue with original content
+        await storage.createActivityLog({
+          type: 'translation_failed',
+          description: `Translation failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          channelPairId: post.channelPairId!,
+          postId: post.id,
+        });
+      }
+    }
     
     // Remove original channel mentions if configured
     if (channelPair.contentFilters?.removeChannelMentions) {

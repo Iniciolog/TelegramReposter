@@ -15,6 +15,7 @@ export const channelPairs = pgTable("channel_pairs", {
   postingDelay: integer("posting_delay").default(0), // in minutes
   contentFilters: jsonb("content_filters").default({}),
   customBranding: text("custom_branding"),
+  autoTranslate: boolean("auto_translate").default(false), // enable/disable auto translation to Russian
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
