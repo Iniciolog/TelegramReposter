@@ -1,4 +1,4 @@
-import cron from 'node-cron';
+import * as cron from 'node-cron';
 import { storage } from '../storage';
 import { telegramService } from './telegram';
 import { imageProcessor } from './imageProcessor';
@@ -15,12 +15,12 @@ export class SchedulerService {
     // Check for pending posts every minute
     const pendingPostsJob = cron.schedule('* * * * *', async () => {
       await this.processPendingPosts();
-    }, { scheduled: false });
+    });
 
     // Clean up old activity logs daily
     const cleanupJob = cron.schedule('0 0 * * *', async () => {
       await this.cleanupOldLogs();
-    }, { scheduled: false });
+    });
 
     pendingPostsJob.start();
     cleanupJob.start();

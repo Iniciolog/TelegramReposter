@@ -108,7 +108,7 @@ export function RecentActivity() {
           )}
         </div>
 
-        {activities && (activities as any[])?.length > 5 && (
+{(activities as any[])?.length > 5 && (
           <div className="mt-4">
             <Button 
               variant="ghost" 
