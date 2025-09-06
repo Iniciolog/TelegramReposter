@@ -152,6 +152,30 @@ export class TelegramService {
       return false;
     }
   }
+
+  async sendPostToChannel(targetUsername: string, content: string, mediaUrls: string[] = []): Promise<void> {
+    if (!this.bot) {
+      throw new Error('Bot not initialized');
+    }
+
+    try {
+      const chatId = targetUsername;
+      
+      // For now, always send as text message to avoid CDN image issues
+      // TODO: Implement image download and re-upload functionality
+      let messageText = content;
+      
+      if (mediaUrls.length > 0) {
+        messageText += '\n\n📸 [Медиа доступно в исходном канале]';
+      }
+      
+      await this.bot.sendMessage(chatId, messageText);
+      
+    } catch (error) {
+      console.error('Error sending post to channel:', error);
+      throw error;
+    }
+  }
 }
 
 export const telegramService = new TelegramService();
