@@ -1,6 +1,7 @@
 import cron from 'node-cron';
 import { storage } from '../storage';
 import { telegramService } from './telegram';
+import { imageProcessor } from './imageProcessor';
 
 export class SchedulerService {
   private jobs: Map<string, cron.ScheduledTask> = new Map();
@@ -113,12 +114,58 @@ export class SchedulerService {
 
     // Send the message
     if (post.mediaUrls && Array.isArray(post.mediaUrls) && post.mediaUrls.length > 0) {
-      // Send with media
-      await telegramService.sendPhoto(
-        channelPair.targetUsername,
-        post.mediaUrls[0],
-        { caption: content }
-      );
+      try {
+        // Download and process image if filters are configured
+        let processedMedia = post.mediaUrls[0];
+        
+        if (channelPair.contentFilters?.addWatermark || channelPair.contentFilters?.removeOriginalBranding) {
+          // Get the file from Telegram
+          const fileStream = await telegramService.bot?.getFileStream(post.mediaUrls[0]);
+          
+          if (fileStream) {
+            // Collect buffer from stream
+            const chunks: Buffer[] = [];
+            for await (const chunk of fileStream) {
+              chunks.push(chunk);
+            }
+            const imageBuffer = Buffer.concat(chunks);
+            
+            // Process the image
+            const processedBuffer = await imageProcessor.processImage(imageBuffer, {
+              addWatermark: channelPair.contentFilters?.addWatermark,
+              watermarkText: channelPair.customBranding || 'Reposted',
+              removeOriginalBranding: channelPair.contentFilters?.removeOriginalBranding,
+              optimizeSize: true,
+              quality: 85
+            });
+            
+            processedMedia = processedBuffer;
+            
+            // Log image processing activity
+            await storage.createActivityLog({
+              type: 'image_processed',
+              description: 'Image processed with filters and branding',
+              channelPairId: channelPair.id,
+              postId: post.id,
+            });
+          }
+        }
+        
+        // Send with processed media
+        await telegramService.sendPhoto(
+          channelPair.targetUsername,
+          processedMedia,
+          { caption: content }
+        );
+      } catch (imageError) {
+        console.error('Error processing image:', imageError);
+        // Fallback to original image
+        await telegramService.sendPhoto(
+          channelPair.targetUsername,
+          post.mediaUrls[0],
+          { caption: content }
+        );
+      }
     } else {
       // Send text only
       await telegramService.sendMessage(

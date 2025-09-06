@@ -33,6 +33,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Start monitoring if we have a valid bot token
       if (settings.botToken) {
         await schedulerService.startMonitoring();
+        
+        // Start telegram polling for new messages
+        await telegramService.startPolling(async (message) => {
+          // Handle new message from monitored channels
+          const channelPairs = await storage.getChannelPairs();
+          const matchingPairs = channelPairs.filter(pair => 
+            pair.sourceUsername === `@${message.chat.username}` && 
+            pair.status === 'active'
+          );
+
+          for (const pair of matchingPairs) {
+            try {
+              // Create post record
+              const post = await storage.createPost({
+                channelPairId: pair.id,
+                originalPostId: message.message_id.toString(),
+                content: message.text || message.caption || '',
+                mediaUrls: message.photo ? [message.photo[message.photo.length - 1].file_id] : [],
+                status: 'pending',
+              });
+
+              // Schedule the post based on delay settings
+              await schedulerService.schedulePost(post.id, pair.postingDelay || 0);
+
+              // Log activity
+              await storage.createActivityLog({
+                type: 'post_detected',
+                description: `New post detected from ${pair.sourceName}`,
+                channelPairId: pair.id,
+                postId: post.id,
+              });
+
+              console.log(`Scheduled post from ${pair.sourceName} to ${pair.targetName}`);
+            } catch (error) {
+              console.error(`Error processing message for pair ${pair.id}:`, error);
+              
+              await storage.createActivityLog({
+                type: 'post_failed',
+                description: `Failed to process post from ${pair.sourceName}: ${error}`,
+                channelPairId: pair.id,
+              });
+            }
+          }
+        });
       }
       
       res.json(settings);

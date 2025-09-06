@@ -12,6 +12,7 @@ import Branding from "@/pages/branding";
 import Scheduler from "@/pages/scheduler";
 import Analytics from "@/pages/analytics";
 import ActivityLogs from "@/pages/activity-logs";
+import Settings from "@/pages/settings";
 
 function Router() {
   return (
@@ -23,6 +24,7 @@ function Router() {
       <Route path="/scheduler" component={Scheduler} />
       <Route path="/analytics" component={Analytics} />
       <Route path="/activity-logs" component={ActivityLogs} />
+      <Route path="/settings" component={Settings} />
       <Route component={NotFound} />
     </Switch>
   );

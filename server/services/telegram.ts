@@ -26,14 +26,18 @@ export class TelegramService {
     this.bot.startPolling();
     
     this.bot.on('channel_post', (message) => {
+      console.log('New channel post detected:', message);
       onNewMessage(message);
     });
 
     this.bot.on('message', (message) => {
       if (message.chat.type === 'channel') {
+        console.log('New channel message detected:', message);
         onNewMessage(message);
       }
     });
+
+    console.log('Telegram bot polling started');
   }
 
   async stopPolling(): Promise<void> {

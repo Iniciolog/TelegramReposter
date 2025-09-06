@@ -18,6 +18,7 @@ const translations: Translations = {
   'nav.scheduler': { en: 'Scheduler', ru: 'Планировщик' },
   'nav.analytics': { en: 'Analytics', ru: 'Аналитика' },
   'nav.activity-logs': { en: 'Activity Logs', ru: 'Журнал активности' },
+  'nav.settings': { en: 'Settings', ru: 'Настройки' },
 
   // Dashboard
   'dashboard.title': { en: 'Dashboard', ru: 'Панель управления' },
@@ -89,6 +90,8 @@ const translations: Translations = {
   'app.plan': { en: 'Premium Plan', ru: 'Премиум план' },
 
   // Page Titles
+  'pages.settings.title': { en: 'Settings', ru: 'Настройки' },
+  'pages.settings.subtitle': { en: 'Configure bot settings and global preferences', ru: 'Настройка бота и глобальных параметров' },
   'pages.channels.title': { en: 'Channels', ru: 'Каналы' },
   'pages.channels.subtitle': { en: 'Manage your channel pairs and configurations', ru: 'Управление парами каналов и настройками' },
   'pages.content-filters.title': { en: 'Content Filters', ru: 'Фильтры контента' },
@@ -117,6 +120,26 @@ const translations: Translations = {
   'cards.schedule-management': { en: 'Schedule Management', ru: 'Управление расписанием' },
   'cards.performance-analytics': { en: 'Performance Analytics', ru: 'Аналитика производительности' },
   'cards.system-activity': { en: 'System Activity', ru: 'Активность системы' },
+
+  // Settings
+  'settings.saved-success': { en: 'Settings saved successfully!', ru: 'Настройки сохранены успешно!' },
+  'settings.saved-description': { en: 'Bot configuration has been updated.', ru: 'Конфигурация бота обновлена.' },
+  'settings.saved-error': { en: 'Error saving settings', ru: 'Ошибка сохранения настроек' },
+  'settings.check-token': { en: 'Please check your bot token and try again.', ru: 'Проверьте токен бота и попробуйте снова.' },
+  'settings.bot-instructions-title': { en: 'How to create a Telegram Bot:', ru: 'Как создать Telegram бота:' },
+  'settings.bot-step-1': { en: 'Open Telegram and search for @BotFather', ru: 'Откройте Telegram и найдите @BotFather' },
+  'settings.bot-step-2': { en: 'Send /newbot command and follow instructions', ru: 'Отправьте команду /newbot и следуйте инструкциям' },
+  'settings.bot-step-3': { en: 'Copy the bot token from BotFather', ru: 'Скопируйте токен бота от BotFather' },
+  'settings.bot-step-4': { en: 'Paste the token below and save settings', ru: 'Вставьте токен ниже и сохраните настройки' },
+  'settings.bot-configuration': { en: 'Bot Configuration', ru: 'Настройка бота' },
+  'settings.bot-token': { en: 'Bot Token', ru: 'Токен бота' },
+  'settings.default-branding': { en: 'Default Branding Text', ru: 'Текст брендинга по умолчанию' },
+  'settings.branding-placeholder': { en: 'Enter default footer text for all posts...', ru: 'Введите текст футера по умолчанию для всех постов...' },
+  'settings.testing-bot': { en: 'Testing bot connection...', ru: 'Проверка подключения бота...' },
+  'settings.bot-connected': { en: 'Bot connected successfully! You can now create channel pairs.', ru: 'Бот подключен успешно! Теперь можно создавать пары каналов.' },
+  'settings.bot-error': { en: 'Failed to connect bot. Please check your token.', ru: 'Не удалось подключить бота. Проверьте токен.' },
+  'settings.saving': { en: 'Saving...', ru: 'Сохранение...' },
+  'settings.save': { en: 'Save Settings', ru: 'Сохранить настройки' },
 
   // Common
   'common.just-now': { en: 'Just now', ru: 'Только что' }

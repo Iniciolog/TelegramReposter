@@ -51,6 +51,11 @@ const navigation = [
     href: "/activity-logs",
     icon: Activity,
   },
+  {
+    name: "nav.settings",
+    href: "/settings",
+    icon: Settings,
+  },
 ];
 
 export function Sidebar() {

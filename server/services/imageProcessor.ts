@@ -12,6 +12,7 @@ export class ImageProcessor {
       maxWidth?: number;
       maxHeight?: number;
       quality?: number;
+      removeOriginalBranding?: boolean;
     } = {}
   ): Promise<Buffer> {
     try {
@@ -40,12 +41,28 @@ export class ImageProcessor {
         }
       }
 
+      // Remove original branding if requested (crop bottom area where watermarks usually are)
+      if (options.removeOriginalBranding) {
+        const width = metadata.width || 1920;
+        const height = metadata.height || 1080;
+        
+        // Crop bottom 5% where watermarks/logos are typically placed
+        const cropHeight = Math.floor(height * 0.95);
+        image = image.extract({
+          left: 0,
+          top: 0,
+          width: width,
+          height: cropHeight
+        });
+      }
+
       // Add watermark if requested
       if (options.addWatermark && options.watermarkText) {
+        const currentMetadata = await image.metadata();
         const watermarkSvg = this.createWatermarkSvg(
           options.watermarkText,
-          metadata.width || 1920,
-          metadata.height || 1080
+          currentMetadata.width || 1920,
+          currentMetadata.height || 1080
         );
 
         image = image.composite([{
