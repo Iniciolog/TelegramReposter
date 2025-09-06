@@ -370,29 +370,63 @@ export class WebChannelParserService {
         }
       }
       
-      // Create post record with translated content
-      const post = await storage.createPost({
-        channelPairId: channelPair.id,
-        originalPostId: message.messageId.toString(),
-        content: content,
-        mediaUrls: message.media || [],
-        status: 'pending',
-      });
+      // Handle different copy modes
+      if (channelPair.copyMode === 'draft' || channelPair.copyMode === 'both') {
+        // Check if draft already exists to avoid duplicates
+        const existingDraft = await storage.getDraftPostByOriginalId(
+          message.messageId.toString(),
+          channelPair.id
+        );
 
-      console.log(`✅ Created post record: ${post.id} ${channelPair.autoTranslate ? '(with translation)' : ''}`);
+        if (!existingDraft) {
+          // Create draft post
+          const draftPost = await storage.createDraftPost({
+            channelPairId: channelPair.id,
+            originalPostId: message.messageId.toString(),
+            content: content,
+            originalContent: message.text || '',
+            mediaUrls: message.media || [],
+            status: 'draft',
+          });
 
-      // Schedule the post
-      await schedulerService.schedulePost(post.id, channelPair.postingDelay || 0);
+          console.log(`📝 Created draft post: ${draftPost.id} ${channelPair.autoTranslate ? '(with translation)' : ''}`);
 
-      // Log activity
-      await storage.createActivityLog({
-        type: 'web_post_detected',
-        description: `New post web-parsed from ${channelPair.sourceName}${channelPair.autoTranslate ? ' (translated)' : ''}`,
-        channelPairId: channelPair.id,
-        postId: post.id,
-      });
+          // Log draft creation
+          await storage.createActivityLog({
+            type: 'web_post_detected',
+            description: `New post web-parsed to drafts from ${channelPair.sourceName}${channelPair.autoTranslate ? ' (translated)' : ''}`,
+            channelPairId: channelPair.id,
+          });
+        } else {
+          console.log(`📝 Draft already exists for message ${message.messageId}, skipping...`);
+        }
+      }
 
-      console.log(`🎯 Scheduled web post from ${channelPair.sourceName} to ${channelPair.targetName}`);
+      if (channelPair.copyMode === 'auto' || channelPair.copyMode === 'both') {
+        // Create post record with translated content for auto-posting
+        const post = await storage.createPost({
+          channelPairId: channelPair.id,
+          originalPostId: message.messageId.toString(),
+          content: content,
+          mediaUrls: message.media || [],
+          status: 'pending',
+        });
+
+        console.log(`✅ Created post record: ${post.id} ${channelPair.autoTranslate ? '(with translation)' : ''}`);
+
+        // Schedule the post
+        await schedulerService.schedulePost(post.id, channelPair.postingDelay || 0);
+
+        // Log activity
+        await storage.createActivityLog({
+          type: 'web_post_detected',
+          description: `New post web-parsed from ${channelPair.sourceName}${channelPair.autoTranslate ? ' (translated)' : ''}`,
+          channelPairId: channelPair.id,
+          postId: post.id,
+        });
+
+        console.log(`🎯 Scheduled web post from ${channelPair.sourceName} to ${channelPair.targetName}`);
+      }
 
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : String(error);
