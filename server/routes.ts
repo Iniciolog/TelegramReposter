@@ -185,6 +185,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Manual parsing trigger endpoint
+  app.post("/api/parse-channel/:username", async (req, res) => {
+    try {
+      const { username } = req.params;
+      
+      if (!username) {
+        return res.status(400).json({ message: "Channel username is required" });
+      }
+      
+      // Trigger manual parsing for this specific channel
+      await channelParserService.parseChannelNow(username);
+      
+      res.json({ 
+        success: true, 
+        message: `Manual parsing triggered for channel ${username}` 
+      });
+      
+    } catch (error) {
+      console.error('Manual parsing error:', error);
+      res.status(500).json({ 
+        message: "Failed to trigger manual parsing",
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
   // Telegram webhook routes
   app.post("/api/telegram/webhook", async (req, res) => {
     try {
