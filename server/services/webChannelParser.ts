@@ -14,7 +14,6 @@ interface WebMessage {
 
 export class WebChannelParserService {
   private parsingInterval: NodeJS.Timeout | null = null;
-  private lastMessageIds: Map<string, number> = new Map();
   private isRunning = false;
 
   async startParsing(): Promise<void> {
@@ -77,13 +76,25 @@ export class WebChannelParserService {
         return;
       }
 
-      // Get last processed message ID for this channel
-      const lastProcessedId = this.lastMessageIds.get(sourceUsername) || 0;
+      // Get the highest processed message ID from database
+      const lastProcessedId = await storage.getMaxProcessedPostId(channelPair.id);
       
-      // Filter new messages
-      const newMessages = messages.filter(msg => 
+      // Filter truly new messages that haven't been processed yet
+      const potentialNewMessages = messages.filter(msg => 
         msg.messageId > lastProcessedId
       );
+
+      // Double-check against database to avoid duplicates
+      const newMessages: typeof messages = [];
+      for (const message of potentialNewMessages) {
+        const existingPost = await storage.getPostByOriginalId(
+          message.messageId.toString(), 
+          channelPair.id
+        );
+        if (!existingPost) {
+          newMessages.push(message);
+        }
+      }
 
       if (newMessages.length === 0) {
         console.log(`📮 No new messages for ${sourceUsername}`);
@@ -95,9 +106,6 @@ export class WebChannelParserService {
       // Process new messages (oldest first)
       for (const message of newMessages) {
         await this.processWebMessage(message, channelPair);
-        
-        // Update last processed message ID
-        this.lastMessageIds.set(sourceUsername, message.messageId);
         
         // Small delay between processing messages
         await new Promise(resolve => setTimeout(resolve, 500));
