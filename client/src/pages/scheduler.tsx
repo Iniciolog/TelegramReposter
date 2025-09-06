@@ -85,9 +85,8 @@ export default function Scheduler() {
     }
 
     // Convert Moscow time to UTC for storage
-    const moscowDateTime = new Date(`${publishDate}T${publishTime}:00`);
-    // Adjust for Moscow timezone offset (UTC+3)
-    const utcDateTime = new Date(moscowDateTime.getTime() - (3 * 60 * 60 * 1000));
+    // Create date in Moscow timezone by specifying the timezone in the constructor
+    const utcDateTime = new Date(`${publishDate}T${publishTime}:00+03:00`);
     
     createPostMutation.mutate({
       channelPairId: selectedChannelPair,
