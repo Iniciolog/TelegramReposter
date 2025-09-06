@@ -1,4 +1,6 @@
 import TelegramBot from 'node-telegram-bot-api';
+import axios from 'axios';
+import FormData from 'form-data';
 
 export class TelegramService {
   private bot: TelegramBot | null = null;
@@ -161,19 +163,53 @@ export class TelegramService {
     try {
       const chatId = targetUsername;
       
-      // For now, always send as text message to avoid CDN image issues
-      // TODO: Implement image download and re-upload functionality
-      let messageText = content;
-      
       if (mediaUrls.length > 0) {
-        messageText += '\n\n📸 [Медиа доступно в исходном канале]';
+        // Download and send images
+        const imageBuffer = await this.downloadImage(mediaUrls[0]);
+        if (imageBuffer) {
+          await this.bot.sendPhoto(chatId, imageBuffer, {
+            caption: content,
+            parse_mode: 'HTML'
+          });
+          return;
+        }
       }
       
-      await this.bot.sendMessage(chatId, messageText);
+      // Fallback to text-only message
+      await this.bot.sendMessage(chatId, content, {
+        parse_mode: 'HTML'
+      });
       
     } catch (error) {
       console.error('Error sending post to channel:', error);
       throw error;
+    }
+  }
+
+  private async downloadImage(imageUrl: string): Promise<Buffer | null> {
+    try {
+      console.log(`📥 Downloading image: ${imageUrl}`);
+      
+      const response = await axios.get(imageUrl, {
+        responseType: 'arraybuffer',
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+          'Accept': 'image/*,*/*;q=0.8'
+        },
+        timeout: 30000,
+        maxRedirects: 5
+      });
+
+      if (response.status === 200 && response.data) {
+        const buffer = Buffer.from(response.data);
+        console.log(`✅ Downloaded image: ${buffer.length} bytes`);
+        return buffer;
+      }
+      
+      return null;
+    } catch (error) {
+      console.error(`❌ Failed to download image ${imageUrl}:`, error);
+      return null;
     }
   }
 }
