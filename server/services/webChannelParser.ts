@@ -2,6 +2,7 @@ import axios, { AxiosError } from 'axios';
 import * as cheerio from 'cheerio';
 import { storage } from '../storage';
 import { schedulerService } from './scheduler';
+import { translationService } from './translationService';
 import type { ChannelPair } from '../../shared/schema';
 
 interface WebMessage {
@@ -331,16 +332,54 @@ export class WebChannelParserService {
     try {
       console.log(`📝 Processing web message ${message.messageId} from ${channelPair.sourceName}`);
       
-      // Create post record
+      let content = message.text || '';
+      
+      // Translate content if auto-translate is enabled and content exists
+      if (channelPair.autoTranslate && content.length > 0) {
+        try {
+          console.log(`🌐 Attempting translation for message ${message.messageId}...`);
+          const translationResult = await translationService.translateToRussian(content);
+          
+          if (translationResult.wasTranslated) {
+            content = translationResult.translatedText;
+            console.log(`✅ Translated ${translationResult.detectedLanguage} → Russian for message ${message.messageId}`);
+            
+            // Log translation success
+            await storage.createActivityLog({
+              type: 'content_translated',
+              description: `Web content translated from ${translationResult.detectedLanguage} to Russian`,
+              channelPairId: channelPair.id,
+              metadata: {
+                originalLanguage: translationResult.detectedLanguage,
+                originalLength: translationResult.originalText.length,
+                translatedLength: translationResult.translatedText.length
+              }
+            });
+          } else {
+            console.log(`ℹ️ No translation needed for message ${message.messageId} (${translationResult.detectedLanguage})`);
+          }
+        } catch (translationError) {
+          console.error(`❌ Translation failed for message ${message.messageId}:`, translationError);
+          
+          // Log translation failure but continue with original content
+          await storage.createActivityLog({
+            type: 'translation_failed',
+            description: `Web translation failed: ${translationError instanceof Error ? translationError.message : 'Unknown error'}`,
+            channelPairId: channelPair.id,
+          });
+        }
+      }
+      
+      // Create post record with translated content
       const post = await storage.createPost({
         channelPairId: channelPair.id,
         originalPostId: message.messageId.toString(),
-        content: message.text || '',
+        content: content,
         mediaUrls: message.media || [],
         status: 'pending',
       });
 
-      console.log(`✅ Created post record: ${post.id}`);
+      console.log(`✅ Created post record: ${post.id} ${channelPair.autoTranslate ? '(with translation)' : ''}`);
 
       // Schedule the post
       await schedulerService.schedulePost(post.id, channelPair.postingDelay || 0);
@@ -348,7 +387,7 @@ export class WebChannelParserService {
       // Log activity
       await storage.createActivityLog({
         type: 'web_post_detected',
-        description: `New post web-parsed from ${channelPair.sourceName}`,
+        description: `New post web-parsed from ${channelPair.sourceName}${channelPair.autoTranslate ? ' (translated)' : ''}`,
         channelPairId: channelPair.id,
         postId: post.id,
       });
