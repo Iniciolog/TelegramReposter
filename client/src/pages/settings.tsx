@@ -41,10 +41,10 @@ export default function Settings() {
   } = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      botToken: settings?.botToken || "",
-      defaultBranding: settings?.defaultBranding || "",
-      globalFilters: settings?.globalFilters || {},
-      notificationSettings: settings?.notificationSettings || {},
+      botToken: (settings as any)?.botToken || "",
+      defaultBranding: (settings as any)?.defaultBranding || "",
+      globalFilters: (settings as any)?.globalFilters || {},
+      notificationSettings: (settings as any)?.notificationSettings || {},
     },
   });
 
