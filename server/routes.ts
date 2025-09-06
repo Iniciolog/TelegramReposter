@@ -5,6 +5,7 @@ import { telegramService } from "./services/telegram";
 import { schedulerService } from "./services/scheduler";
 import { channelParserService } from "./services/channelParser";
 import { webChannelParserService } from "./services/webChannelParser";
+import { translationService } from "./services/translationService";
 import { insertChannelPairSchema, insertSettingsSchema } from "@shared/schema";
 import { z } from "zod";
 
@@ -264,6 +265,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Webhook error:', error);
       res.status(500).json({ message: "Webhook processing failed" });
+    }
+  });
+
+  // Test translation endpoint
+  app.post("/api/test-translation", async (req, res) => {
+    try {
+      const { text } = req.body;
+      
+      if (!text) {
+        return res.status(400).json({ message: "Text is required" });
+      }
+
+      const translatedText = await translationService.translateToRussian(text);
+      
+      res.json({ 
+        original: text,
+        translated: translatedText,
+        success: true 
+      });
+    } catch (error) {
+      console.error('Translation test error:', error);
+      res.status(500).json({ 
+        message: "Translation test failed", 
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 
