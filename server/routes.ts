@@ -47,14 +47,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
           })));
           
           const matchingPairs = channelPairs.filter(pair => {
-            const sourceMatch = pair.sourceUsername === `@${message.chat.username}` || 
-                              pair.sourceUsername === message.chat.username;
-            console.log(`Checking pair ${pair.sourceUsername} against @${message.chat.username}: ${sourceMatch}`);
+            // Remove @ symbol for comparison if present
+            const sourceUsername = pair.sourceUsername.replace('@', '');
+            const messageUsername = message.chat.username;
+            
+            const sourceMatch = sourceUsername === messageUsername;
+            console.log(`Checking pair source "${sourceUsername}" against message from "${messageUsername}": ${sourceMatch}`);
             return sourceMatch && pair.status === 'active';
           });
 
+          console.log(`Found ${matchingPairs.length} matching pairs for message from ${message.chat.username}`);
+          
           for (const pair of matchingPairs) {
             try {
+              console.log(`Processing message for pair: ${pair.sourceName} → ${pair.targetName}`);
+              
               // Create post record
               const post = await storage.createPost({
                 channelPairId: pair.id,
@@ -63,6 +70,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 mediaUrls: message.photo ? [message.photo[message.photo.length - 1].file_id] : [],
                 status: 'pending',
               });
+
+              console.log(`Created post record with ID: ${post.id}`);
 
               // Schedule the post based on delay settings
               await schedulerService.schedulePost(post.id, pair.postingDelay || 0);
@@ -75,9 +84,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 postId: post.id,
               });
 
-              console.log(`Scheduled post from ${pair.sourceName} to ${pair.targetName}`);
+              console.log(`✅ Scheduled post from ${pair.sourceName} to ${pair.targetName} with ${pair.postingDelay || 0} minute delay`);
             } catch (error) {
-              console.error(`Error processing message for pair ${pair.id}:`, error);
+              console.error(`❌ Error processing message for pair ${pair.id}:`, error);
               
               await storage.createActivityLog({
                 type: 'post_failed',
