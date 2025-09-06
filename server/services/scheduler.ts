@@ -97,6 +97,9 @@ export class SchedulerService {
     // Apply content filters
     let content = post.content || '';
     
+    // Remove the placeholder text that appears when media is not available (critical fix)
+    content = content.replace(/📸\s*\[Медиа доступно в исходном канале\]/gi, '');
+    
     // Remove original channel mentions if configured
     if (channelPair.contentFilters?.removeChannelMentions) {
       content = content.replace(/@\w+/g, '');
@@ -106,6 +109,9 @@ export class SchedulerService {
     if (channelPair.contentFilters?.removeExternalLinks) {
       content = content.replace(/https?:\/\/[^\s]+/g, '');
     }
+    
+    // Clean up extra whitespace after all replacements
+    content = content.replace(/\n\s*\n/g, '\n').trim();
     
     // Add custom branding if configured
     if (channelPair.customBranding) {

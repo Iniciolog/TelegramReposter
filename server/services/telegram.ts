@@ -164,21 +164,34 @@ export class TelegramService {
       const chatId = targetUsername;
       
       if (mediaUrls.length > 0) {
-        // Download and send images
-        const imageBuffer = await this.downloadImage(mediaUrls[0]);
-        if (imageBuffer) {
-          await this.bot.sendPhoto(chatId, imageBuffer, {
-            caption: content,
-            parse_mode: 'HTML'
-          });
-          return;
+        // Try to download and validate multiple images until we find a valid one
+        for (const mediaUrl of mediaUrls) {
+          console.log(`🔍 Trying media: ${mediaUrl}`);
+          const imageBuffer = await this.downloadImage(mediaUrl);
+          
+          if (imageBuffer) {
+            console.log(`✅ Successfully using media: ${mediaUrl}`);
+            await this.bot.sendPhoto(chatId, imageBuffer, {
+              caption: content,
+              parse_mode: 'HTML'
+            });
+            return;
+          }
+          
+          console.log(`⚠️ Skipping invalid media: ${mediaUrl}`);
         }
+        
+        console.log(`📝 No valid images found, sending text-only message`);
       }
       
-      // Fallback to text-only message
-      await this.bot.sendMessage(chatId, content, {
-        parse_mode: 'HTML'
-      });
+      // Fallback to text-only message (no valid media found or no media provided)
+      if (content && content.trim()) {
+        await this.bot.sendMessage(chatId, content, {
+          parse_mode: 'HTML'
+        });
+      } else {
+        console.log(`⚠️ Skipping post - no content and no valid media`);
+      }
       
     } catch (error) {
       console.error('Error sending post to channel:', error);
@@ -202,6 +215,13 @@ export class TelegramService {
 
       if (response.status === 200 && response.data) {
         const buffer = Buffer.from(response.data);
+        
+        // Validate image size and content
+        if (!this.isValidImageBuffer(buffer)) {
+          console.log(`❌ Invalid image rejected: ${imageUrl} (likely avatar/logo)`);
+          return null;
+        }
+        
         console.log(`✅ Downloaded image: ${buffer.length} bytes`);
         return buffer;
       }
@@ -211,6 +231,45 @@ export class TelegramService {
       console.error(`❌ Failed to download image ${imageUrl}:`, error);
       return null;
     }
+  }
+
+  private isValidImageBuffer(buffer: Buffer): boolean {
+    // Check minimum file size (channel avatars are usually small)
+    if (buffer.length < 5000) { // Less than 5KB is likely an avatar
+      return false;
+    }
+    
+    // Check if it's too large (over 20MB)
+    if (buffer.length > 20 * 1024 * 1024) {
+      return false;
+    }
+    
+    // Basic image format validation by checking magic bytes
+    const header = buffer.slice(0, 12);
+    
+    // JPEG files start with FFD8
+    if (header[0] === 0xFF && header[1] === 0xD8) {
+      return true;
+    }
+    
+    // PNG files start with 89504E47
+    if (header[0] === 0x89 && header[1] === 0x50 && header[2] === 0x4E && header[3] === 0x47) {
+      return true;
+    }
+    
+    // WebP files start with RIFF and contain WEBP
+    if (header[0] === 0x52 && header[1] === 0x49 && header[2] === 0x46 && header[3] === 0x46 && 
+        header[8] === 0x57 && header[9] === 0x45 && header[10] === 0x42 && header[11] === 0x50) {
+      return true;
+    }
+    
+    // GIF files start with GIF87a or GIF89a
+    if ((header[0] === 0x47 && header[1] === 0x49 && header[2] === 0x46 && header[3] === 0x38 && 
+         (header[4] === 0x37 || header[4] === 0x39) && header[5] === 0x61)) {
+      return true;
+    }
+    
+    return false;
   }
 }
 

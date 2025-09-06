@@ -189,7 +189,15 @@ export class WebChannelParserService {
     const textElement = messageElement.find('.tgme_widget_message_text');
     if (textElement.length > 0) {
       // Get text content, preserving line breaks
-      return textElement.text().trim();
+      let text = textElement.text().trim();
+      
+      // Remove the placeholder text that appears when media is not available
+      text = text.replace(/📸\s*\[Медиа доступно в исходном канале\]/gi, '');
+      
+      // Clean up extra whitespace
+      text = text.replace(/\n\s*\n/g, '\n').trim();
+      
+      return text;
     }
     return '';
   }
