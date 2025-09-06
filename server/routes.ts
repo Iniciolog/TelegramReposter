@@ -6,7 +6,7 @@ import { schedulerService } from "./services/scheduler";
 import { channelParserService } from "./services/channelParser";
 import { webChannelParserService } from "./services/webChannelParser";
 import { translationService } from "./services/translationService";
-import { insertChannelPairSchema, insertSettingsSchema } from "@shared/schema";
+import { insertChannelPairSchema, insertSettingsSchema, insertScheduledPostSchema } from "@shared/schema";
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -265,6 +265,124 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Webhook error:', error);
       res.status(500).json({ message: "Webhook processing failed" });
+    }
+  });
+
+  // Scheduled Posts routes
+  app.get("/api/scheduled-posts", async (req, res) => {
+    try {
+      const { channelPairId } = req.query;
+      const scheduledPosts = await storage.getScheduledPosts(channelPairId as string);
+      res.json(scheduledPosts);
+    } catch (error) {
+      console.error('Error getting scheduled posts:', error);
+      res.status(500).json({ message: "Failed to get scheduled posts" });
+    }
+  });
+
+  app.get("/api/scheduled-posts/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const scheduledPost = await storage.getScheduledPost(id);
+      
+      if (!scheduledPost) {
+        return res.status(404).json({ message: "Scheduled post not found" });
+      }
+      
+      res.json(scheduledPost);
+    } catch (error) {
+      console.error('Error getting scheduled post:', error);
+      res.status(500).json({ message: "Failed to get scheduled post" });
+    }
+  });
+
+  app.post("/api/scheduled-posts", async (req, res) => {
+    try {
+      // Convert string publishAt to Date manually before validation
+      const postData = {
+        ...req.body,
+        publishAt: new Date(req.body.publishAt)
+      };
+      const validatedPost = insertScheduledPostSchema.parse(postData);
+      const scheduledPost = await storage.createScheduledPost(validatedPost);
+      
+      // Log activity
+      await storage.createActivityLog({
+        type: 'scheduled_post_created',
+        description: `Scheduled post "${scheduledPost.title}" created for ${new Date(scheduledPost.publishAt).toLocaleString()}`,
+        channelPairId: scheduledPost.channelPairId,
+      });
+      
+      res.status(201).json(scheduledPost);
+    } catch (error) {
+      console.error('Error creating scheduled post:', error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Validation error", 
+          errors: error.errors 
+        });
+      }
+      res.status(500).json({ message: "Failed to create scheduled post" });
+    }
+  });
+
+  app.put("/api/scheduled-posts/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const updateData = insertScheduledPostSchema.partial().parse(req.body);
+      
+      const scheduledPost = await storage.updateScheduledPost(id, updateData);
+      
+      if (!scheduledPost) {
+        return res.status(404).json({ message: "Scheduled post not found" });
+      }
+      
+      // Log activity
+      await storage.createActivityLog({
+        type: 'scheduled_post_updated',
+        description: `Scheduled post "${scheduledPost.title}" updated`,
+        channelPairId: scheduledPost.channelPairId,
+      });
+      
+      res.json(scheduledPost);
+    } catch (error) {
+      console.error('Error updating scheduled post:', error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Validation error", 
+          errors: error.errors 
+        });
+      }
+      res.status(500).json({ message: "Failed to update scheduled post" });
+    }
+  });
+
+  app.delete("/api/scheduled-posts/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      
+      // Get post info for logging before deletion
+      const scheduledPost = await storage.getScheduledPost(id);
+      
+      const deleted = await storage.deleteScheduledPost(id);
+      
+      if (!deleted) {
+        return res.status(404).json({ message: "Scheduled post not found" });
+      }
+      
+      // Log activity
+      if (scheduledPost) {
+        await storage.createActivityLog({
+          type: 'scheduled_post_deleted',
+          description: `Scheduled post "${scheduledPost.title}" deleted`,
+          channelPairId: scheduledPost.channelPairId,
+        });
+      }
+      
+      res.json({ message: "Scheduled post deleted successfully" });
+    } catch (error) {
+      console.error('Error deleting scheduled post:', error);
+      res.status(500).json({ message: "Failed to delete scheduled post" });
     }
   });
 

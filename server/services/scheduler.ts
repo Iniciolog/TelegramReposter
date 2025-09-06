@@ -18,15 +18,22 @@ export class SchedulerService {
       await this.processPendingPosts();
     });
 
+    // Check for scheduled posts every minute
+    const scheduledPostsJob = cron.schedule('* * * * *', async () => {
+      await this.processScheduledPosts();
+    });
+
     // Clean up old activity logs daily
     const cleanupJob = cron.schedule('0 0 * * *', async () => {
       await this.cleanupOldLogs();
     });
 
     pendingPostsJob.start();
+    scheduledPostsJob.start();
     cleanupJob.start();
 
     this.jobs.set('pending-posts', pendingPostsJob);
+    this.jobs.set('scheduled-posts', scheduledPostsJob);
     this.jobs.set('cleanup', cleanupJob);
 
     console.log('Scheduler service started');
@@ -236,6 +243,105 @@ export class SchedulerService {
         scheduledAt,
         status: 'pending',
       });
+    }
+  }
+
+  async processScheduledPosts(): Promise<void> {
+    try {
+      const pendingScheduledPosts = await storage.getPendingScheduledPosts();
+      
+      for (const scheduledPost of pendingScheduledPosts) {
+        try {
+          const channelPair = await storage.getChannelPair(scheduledPost.channelPairId);
+          if (!channelPair || channelPair.status !== 'active') {
+            console.log(`⚠️ Skipping scheduled post ${scheduledPost.id}: Channel pair not active`);
+            continue;
+          }
+
+          // Process and translate content if needed
+          let content = scheduledPost.content;
+          
+          // Check if content needs translation
+          const autoTranslate = channelPair.autoTranslate || false;
+          
+          if (autoTranslate) {
+            try {
+              const translationResult = await translationService.translateToRussian(content);
+              if (translationResult.wasTranslated) {
+                content = translationResult.translatedText;
+                
+                // Log translation
+                await storage.createActivityLog({
+                  type: 'translation_success',
+                  description: `Scheduled post translated from ${translationResult.detectedLanguage} to Russian`,
+                  channelPairId: scheduledPost.channelPairId,
+                  metadata: {
+                    originalLanguage: translationResult.detectedLanguage,
+                    originalLength: translationResult.originalText.length,
+                    translatedLength: translationResult.translatedText.length
+                  }
+                });
+                
+                console.log(`🌐 Translated ${translationResult.detectedLanguage} → Russian for scheduled post ${scheduledPost.id}`);
+              }
+            } catch (error) {
+              console.error(`❌ Translation failed for scheduled post ${scheduledPost.id}:`, error);
+              
+              // Log translation failure but continue with original content
+              await storage.createActivityLog({
+                type: 'translation_failed',
+                description: `Translation failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+                channelPairId: scheduledPost.channelPairId,
+              });
+            }
+          }
+
+          // Add custom branding if configured
+          if (channelPair.customBranding) {
+            content += '\n\n' + channelPair.customBranding;
+          }
+
+          // Send the post
+          await telegramService.sendPostToChannel(
+            channelPair.targetUsername,
+            content,
+            scheduledPost.mediaUrls || []
+          );
+
+          // Update scheduled post status
+          await storage.updateScheduledPost(scheduledPost.id, {
+            status: 'published',
+            publishedAt: new Date(),
+          });
+
+          // Log activity
+          await storage.createActivityLog({
+            type: 'scheduled_post_published',
+            description: `Scheduled post "${scheduledPost.title}" published to ${channelPair.targetName}`,
+            channelPairId: scheduledPost.channelPairId,
+          });
+
+          console.log(`📅 Published scheduled post: ${scheduledPost.title} to ${channelPair.targetName}`);
+
+        } catch (error) {
+          console.error(`❌ Failed to publish scheduled post ${scheduledPost.id}:`, error);
+          
+          // Update status to failed
+          await storage.updateScheduledPost(scheduledPost.id, {
+            status: 'failed',
+            errorMessage: error instanceof Error ? error.message : 'Unknown error',
+          });
+
+          // Log failure
+          await storage.createActivityLog({
+            type: 'scheduled_post_failed',
+            description: `Failed to publish scheduled post "${scheduledPost.title}": ${error instanceof Error ? error.message : 'Unknown error'}`,
+            channelPairId: scheduledPost.channelPairId,
+          });
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error processing scheduled posts:', error);
     }
   }
 }

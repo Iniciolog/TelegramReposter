@@ -7,13 +7,16 @@ import {
   type InsertActivityLog,
   type Settings,
   type InsertSettings,
+  type ScheduledPost,
+  type InsertScheduledPost,
   channelPairs,
   posts,
   activityLogs,
-  settings
+  settings,
+  scheduledPosts
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, lte, and } from "drizzle-orm";
 
 export interface IStorage {
   // Channel Pairs
@@ -36,6 +39,14 @@ export interface IStorage {
   // Settings
   getSettings(): Promise<Settings | undefined>;
   updateSettings(settings: InsertSettings): Promise<Settings>;
+  
+  // Scheduled Posts
+  getScheduledPosts(channelPairId?: string): Promise<ScheduledPost[]>;
+  getScheduledPost(id: string): Promise<ScheduledPost | undefined>;
+  createScheduledPost(post: InsertScheduledPost): Promise<ScheduledPost>;
+  updateScheduledPost(id: string, post: Partial<InsertScheduledPost>): Promise<ScheduledPost | undefined>;
+  deleteScheduledPost(id: string): Promise<boolean>;
+  getPendingScheduledPosts(): Promise<ScheduledPost[]>;
   
   // Analytics
   getStats(): Promise<{
@@ -223,6 +234,58 @@ export class DatabaseStorage implements IStorage {
       successRate,
       errors,
     };
+  }
+
+  // Scheduled Posts Implementation
+  async getScheduledPosts(channelPairId?: string): Promise<ScheduledPost[]> {
+    const query = db.select().from(scheduledPosts);
+    if (channelPairId) {
+      return await query.where(eq(scheduledPosts.channelPairId, channelPairId)).orderBy(desc(scheduledPosts.publishAt));
+    }
+    return await query.orderBy(desc(scheduledPosts.publishAt));
+  }
+
+  async getScheduledPost(id: string): Promise<ScheduledPost | undefined> {
+    const [scheduledPost] = await db.select().from(scheduledPosts).where(eq(scheduledPosts.id, id));
+    return scheduledPost;
+  }
+
+  async createScheduledPost(post: InsertScheduledPost): Promise<ScheduledPost> {
+    const [created] = await db.insert(scheduledPosts).values(post).returning();
+    return created;
+  }
+
+  async updateScheduledPost(id: string, post: Partial<InsertScheduledPost>): Promise<ScheduledPost | undefined> {
+    const [updated] = await db
+      .update(scheduledPosts)
+      .set({ ...post, updatedAt: new Date() })
+      .where(eq(scheduledPosts.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteScheduledPost(id: string): Promise<boolean> {
+    try {
+      const result = await db.delete(scheduledPosts).where(eq(scheduledPosts.id, id));
+      return result.rowCount !== null && result.rowCount > 0;
+    } catch (error) {
+      console.error('Error deleting scheduled post:', error);
+      return false;
+    }
+  }
+
+  async getPendingScheduledPosts(): Promise<ScheduledPost[]> {
+    const now = new Date();
+    return await db
+      .select()
+      .from(scheduledPosts)
+      .where(
+        and(
+          eq(scheduledPosts.status, 'scheduled'),
+          lte(scheduledPosts.publishAt, now)
+        )
+      )
+      .orderBy(scheduledPosts.publishAt);
   }
 }
 

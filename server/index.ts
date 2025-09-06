@@ -43,6 +43,10 @@ app.use((req, res, next) => {
   const { webChannelParserService } = await import("./services/webChannelParser");
   await webChannelParserService.startParsing();
 
+  // Start scheduler service for processing pending and scheduled posts
+  const { schedulerService } = await import("./services/scheduler");
+  await schedulerService.startMonitoring();
+
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";

@@ -54,6 +54,21 @@ export const settings = pgTable("settings", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+export const scheduledPosts = pgTable("scheduled_posts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  channelPairId: varchar("channel_pair_id").references(() => channelPairs.id).notNull(),
+  title: text("title").notNull(),
+  content: text("content").notNull(),
+  mediaUrls: jsonb("media_urls").default([]),
+  publishAt: timestamp("publish_at").notNull(),
+  status: text("status").notNull().default("scheduled"), // scheduled, published, failed, cancelled
+  errorMessage: text("error_message"),
+  publishedPostId: text("published_post_id"),
+  publishedAt: timestamp("published_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Insert schemas
 export const insertChannelPairSchema = createInsertSchema(channelPairs).omit({
   id: true,
@@ -77,6 +92,13 @@ export const insertSettingsSchema = createInsertSchema(settings).omit({
   updatedAt: true,
 });
 
+export const insertScheduledPostSchema = createInsertSchema(scheduledPosts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  publishedAt: true,
+});
+
 // Types
 export type ChannelPair = typeof channelPairs.$inferSelect;
 export type InsertChannelPair = z.infer<typeof insertChannelPairSchema>;
@@ -89,3 +111,6 @@ export type InsertActivityLog = z.infer<typeof insertActivityLogSchema>;
 
 export type Settings = typeof settings.$inferSelect;
 export type InsertSettings = z.infer<typeof insertSettingsSchema>;
+
+export type ScheduledPost = typeof scheduledPosts.$inferSelect;
+export type InsertScheduledPost = z.infer<typeof insertScheduledPostSchema>;
