@@ -1,7 +1,10 @@
-import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 import { 
   ArrowRight, 
   MoreVertical, 
@@ -15,12 +18,88 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export function ChannelPairs() {
   const { data: channelPairs, isLoading } = useQuery({
     queryKey: ["/api/channel-pairs"],
   });
   const { t } = useLanguage();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [pairToDelete, setPairToDelete] = useState<any>(null);
+  
+  // Delete mutation
+  const deleteMutation = useMutation({
+    mutationFn: async (pairId: string) => {
+      await apiRequest("DELETE", `/api/channel-pairs/${pairId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/channel-pairs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
+      toast({
+        title: "Пара каналов удалена",
+        description: "Канал успешно удален из системы",
+      });
+      setDeleteDialogOpen(false);
+      setPairToDelete(null);
+    },
+    onError: (error: any) => {
+      toast({
+        variant: "destructive",
+        title: "Ошибка удаления",
+        description: error.message || "Не удалось удалить пару каналов",
+      });
+    },
+  });
+  
+  // Pause/Resume mutation
+  const toggleStatusMutation = useMutation({
+    mutationFn: async ({ pairId, newStatus }: { pairId: string; newStatus: string }) => {
+      await apiRequest("PUT", `/api/channel-pairs/${pairId}`, { status: newStatus });
+    },
+    onSuccess: (_, { newStatus }) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/channel-pairs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
+      toast({
+        title: newStatus === "paused" ? "Канал приостановлен" : "Канал возобновлен",
+        description: newStatus === "paused" ? "Автопостинг приостановлен" : "Автопостинг возобновлен",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        variant: "destructive",
+        title: "Ошибка изменения статуса",
+        description: error.message || "Не удалось изменить статус канала",
+      });
+    },
+  });
+  
+  const handleDeleteClick = (pair: any) => {
+    setPairToDelete(pair);
+    setDeleteDialogOpen(true);
+  };
+  
+  const handleConfirmDelete = () => {
+    if (pairToDelete) {
+      deleteMutation.mutate(pairToDelete.id);
+    }
+  };
+  
+  const handleToggleStatus = (pair: any) => {
+    const newStatus = pair.status === "active" ? "paused" : "active";
+    toggleStatusMutation.mutate({ pairId: pair.id, newStatus });
+  };
 
   if (isLoading) {
     return (
@@ -145,12 +224,18 @@ export function ChannelPairs() {
                       <DropdownMenuItem data-testid={`menu-edit-${pair.id}`}>
                         {t('channel-pairs.edit')}
                       </DropdownMenuItem>
-                      <DropdownMenuItem data-testid={`menu-pause-${pair.id}`}>
+                      <DropdownMenuItem 
+                        data-testid={`menu-pause-${pair.id}`}
+                        onClick={() => handleToggleStatus(pair)}
+                        disabled={toggleStatusMutation.isPending}
+                      >
                         {pair.status === "active" ? t('channel-pairs.pause') : t('channel-pairs.resume')}
                       </DropdownMenuItem>
                       <DropdownMenuItem 
                         className="text-destructive"
                         data-testid={`menu-delete-${pair.id}`}
+                        onClick={() => handleDeleteClick(pair)}
+                        disabled={deleteMutation.isPending}
                       >
                         {t('channel-pairs.delete')}
                       </DropdownMenuItem>
@@ -162,6 +247,30 @@ export function ChannelPairs() {
           )}
         </div>
       </CardContent>
+      
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Подтвердить удаление</AlertDialogTitle>
+            <AlertDialogDescription>
+              Вы уверены, что хотите удалить пару каналов{" "}
+              <strong>{pairToDelete?.sourceName} → {pairToDelete?.targetName}</strong>?
+              <br /><br />
+              Это действие нельзя отменить. Все связанные посты и настройки будут удалены.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Отмена</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleConfirmDelete}
+              disabled={deleteMutation.isPending}
+              className="bg-destructive hover:bg-destructive/90"
+            >
+              {deleteMutation.isPending ? "Удаляем..." : "Удалить"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }
