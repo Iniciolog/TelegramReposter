@@ -9,11 +9,14 @@ import {
   type InsertSettings,
   type ScheduledPost,
   type InsertScheduledPost,
+  type DraftPost,
+  type InsertDraftPost,
   channelPairs,
   posts,
   activityLogs,
   settings,
-  scheduledPosts
+  scheduledPosts,
+  draftPosts
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, lte, and, sql } from "drizzle-orm";
@@ -49,6 +52,14 @@ export interface IStorage {
   updateScheduledPost(id: string, post: Partial<InsertScheduledPost>): Promise<ScheduledPost | undefined>;
   deleteScheduledPost(id: string): Promise<boolean>;
   getPendingScheduledPosts(): Promise<ScheduledPost[]>;
+  
+  // Draft Posts
+  getDraftPosts(channelPairId?: string): Promise<DraftPost[]>;
+  getDraftPost(id: string): Promise<DraftPost | undefined>;
+  createDraftPost(post: InsertDraftPost): Promise<DraftPost>;
+  updateDraftPost(id: string, post: Partial<InsertDraftPost>): Promise<DraftPost | undefined>;
+  deleteDraftPost(id: string): Promise<boolean>;
+  getDraftPostByOriginalId(originalPostId: string, channelPairId: string): Promise<DraftPost | undefined>;
   
   // Analytics
   getStats(): Promise<{
@@ -313,6 +324,60 @@ export class DatabaseStorage implements IStorage {
         )
       )
       .orderBy(scheduledPosts.publishAt);
+  }
+
+  // Draft Posts
+  async getDraftPosts(channelPairId?: string): Promise<DraftPost[]> {
+    if (channelPairId) {
+      return await db
+        .select()
+        .from(draftPosts)
+        .where(eq(draftPosts.channelPairId, channelPairId))
+        .orderBy(desc(draftPosts.createdAt));
+    }
+    return await db.select().from(draftPosts).orderBy(desc(draftPosts.createdAt));
+  }
+
+  async getDraftPost(id: string): Promise<DraftPost | undefined> {
+    const [draft] = await db.select().from(draftPosts).where(eq(draftPosts.id, id));
+    return draft;
+  }
+
+  async createDraftPost(post: InsertDraftPost): Promise<DraftPost> {
+    const [created] = await db.insert(draftPosts).values(post).returning();
+    return created;
+  }
+
+  async updateDraftPost(id: string, post: Partial<InsertDraftPost>): Promise<DraftPost | undefined> {
+    const [updated] = await db
+      .update(draftPosts)
+      .set({ ...post, updatedAt: new Date() })
+      .where(eq(draftPosts.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteDraftPost(id: string): Promise<boolean> {
+    try {
+      const result = await db.delete(draftPosts).where(eq(draftPosts.id, id));
+      return result.rowCount !== null && result.rowCount > 0;
+    } catch (error) {
+      console.error('Error deleting draft post:', error);
+      return false;
+    }
+  }
+
+  async getDraftPostByOriginalId(originalPostId: string, channelPairId: string): Promise<DraftPost | undefined> {
+    const [draft] = await db
+      .select()
+      .from(draftPosts)
+      .where(
+        and(
+          eq(draftPosts.originalPostId, originalPostId),
+          eq(draftPosts.channelPairId, channelPairId)
+        )
+      );
+    return draft;
   }
 }
 
