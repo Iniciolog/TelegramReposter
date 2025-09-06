@@ -10,6 +10,15 @@ import { insertChannelPairSchema, insertSettingsSchema, insertScheduledPostSchem
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Health check endpoint for deployment verification
+  app.get("/api/health", (req, res) => {
+    res.status(200).json({ 
+      status: "ok", 
+      timestamp: new Date().toISOString(),
+      message: "Server is running" 
+    });
+  });
+
   // Settings routes
   app.get("/api/settings", async (req, res) => {
     try {
