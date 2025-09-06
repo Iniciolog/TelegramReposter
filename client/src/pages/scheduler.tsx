@@ -27,6 +27,9 @@ export default function Scheduler() {
   const [postContent, setPostContent] = useState("");
   const [publishDate, setPublishDate] = useState("");
   const [publishTime, setPublishTime] = useState("");
+  
+  // Moscow timezone
+  const MOSCOW_TIMEZONE = 'Europe/Moscow';
 
   // Fetch scheduled posts
   const { data: scheduledPosts = [], isLoading: postsLoading } = useQuery<ScheduledPost[]>({
@@ -81,13 +84,16 @@ export default function Scheduler() {
       return;
     }
 
-    const publishDateTime = new Date(`${publishDate}T${publishTime}:00.000Z`);
+    // Convert Moscow time to UTC for storage
+    const moscowDateTime = new Date(`${publishDate}T${publishTime}:00`);
+    // Adjust for Moscow timezone offset (UTC+3)
+    const utcDateTime = new Date(moscowDateTime.getTime() - (3 * 60 * 60 * 1000));
     
     createPostMutation.mutate({
       channelPairId: selectedChannelPair,
       title: postTitle,
       content: postContent,
-      publishAt: publishDateTime.toISOString(),
+      publishAt: utcDateTime.toISOString(),
       status: 'scheduled'
     });
   };
@@ -107,7 +113,19 @@ export default function Scheduler() {
 
   const formatDateTime = (dateString: string | Date) => {
     const date = typeof dateString === 'string' ? new Date(dateString) : dateString;
-    return format(date, "dd MMMM yyyy, HH:mm", { locale: ru });
+    // Convert to Moscow time for display using Intl.DateTimeFormat
+    const moscowTime = new Date(date.toLocaleString("en-US", {timeZone: MOSCOW_TIMEZONE}));
+    return format(moscowTime, "dd MMMM yyyy, HH:mm", { locale: ru }) + ' (МСК)';
+  };
+  
+  const getCurrentMoscowTime = () => {
+    const now = new Date();
+    // Get current time in Moscow timezone
+    const moscowTime = new Date(now.toLocaleString("en-US", {timeZone: MOSCOW_TIMEZONE}));
+    return {
+      date: format(moscowTime, 'yyyy-MM-dd'),
+      time: format(moscowTime, 'HH:mm')
+    };
   };
 
   return (
@@ -133,6 +151,9 @@ export default function Scheduler() {
               <DialogContent className="sm:max-w-[600px]">
                 <DialogHeader>
                   <DialogTitle>Запланировать новый пост</DialogTitle>
+                  <p className="text-sm text-muted-foreground">
+                    🕰️ Время указывается по московскому времени (МСК, UTC+3)
+                  </p>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
                   <div className="grid gap-2">
@@ -173,17 +194,18 @@ export default function Scheduler() {
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="grid gap-2">
-                      <Label htmlFor="date">Дата публикации</Label>
+                      <Label htmlFor="date">Дата публикации (МСК)</Label>
                       <Input
                         id="date"
                         type="date"
                         value={publishDate}
                         onChange={(e) => setPublishDate(e.target.value)}
                         data-testid="input-date"
+                        min={getCurrentMoscowTime().date}
                       />
                     </div>
                     <div className="grid gap-2">
-                      <Label htmlFor="time">Время публикации</Label>
+                      <Label htmlFor="time">Время публикации (МСК)</Label>
                       <Input
                         id="time"
                         type="time"
@@ -192,6 +214,22 @@ export default function Scheduler() {
                         data-testid="input-time"
                       />
                     </div>
+                  </div>
+                  <div className="text-xs text-muted-foreground flex items-center gap-1">
+                    🕰️ Текущее московское время: {getCurrentMoscowTime().date} {getCurrentMoscowTime().time}
+                    <Button 
+                      type="button" 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-auto p-1 text-xs"
+                      onClick={() => {
+                        const current = getCurrentMoscowTime();
+                        setPublishDate(current.date);
+                        setPublishTime(current.time);
+                      }}
+                    >
+                      Использовать
+                    </Button>
                   </div>
                 </div>
                 <div className="flex justify-end gap-2">
