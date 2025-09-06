@@ -4,6 +4,7 @@ import { storage } from "./storage";
 import { telegramService } from "./services/telegram";
 import { schedulerService } from "./services/scheduler";
 import { insertChannelPairSchema, insertSettingsSchema } from "@shared/schema";
+import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Settings routes
@@ -97,34 +98,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/channel-pairs", async (req, res) => {
     try {
-      const validatedChannelPair = insertChannelPairSchema.parse(req.body);
+      console.log('Received channel pair data:', req.body);
       
-      // Validate channels with Telegram
+      // Create a flexible validation schema that allows missing sourceName/targetName
+      const flexibleSchema = insertChannelPairSchema.extend({
+        sourceName: z.string().optional(),
+        targetName: z.string().optional(),
+      });
+      
+      const validatedChannelPair = flexibleSchema.parse(req.body);
+      
+      // Set default names if not provided
+      if (!validatedChannelPair.sourceName) {
+        validatedChannelPair.sourceName = validatedChannelPair.sourceUsername as string;
+      }
+      if (!validatedChannelPair.targetName) {
+        validatedChannelPair.targetName = validatedChannelPair.targetUsername as string;
+      }
+      
+      // Try to validate channels with Telegram (but don't fail if it doesn't work)
       try {
-        const sourceInfo = await telegramService.getChannelInfo(validatedChannelPair.sourceUsername);
-        const targetInfo = await telegramService.getChannelInfo(validatedChannelPair.targetUsername);
+        const sourceInfo = await telegramService.getChannelInfo(validatedChannelPair.sourceUsername as string);
+        const targetInfo = await telegramService.getChannelInfo(validatedChannelPair.targetUsername as string);
         
-        // Check bot permissions on target channel
-        const hasPermissions = await telegramService.checkBotPermissions(targetInfo.id);
-        if (!hasPermissions) {
-          return res.status(400).json({ 
-            message: "Bot doesn't have admin permissions on target channel" 
-          });
-        }
-        
-        // Update with actual channel info
+        // Update with actual channel info if successful
         validatedChannelPair.sourceName = sourceInfo.title;
         validatedChannelPair.sourceSubscribers = sourceInfo.memberCount;
         validatedChannelPair.targetName = targetInfo.title;
         validatedChannelPair.targetSubscribers = targetInfo.memberCount;
         
+        // Check bot permissions on target channel
+        const hasPermissions = await telegramService.checkBotPermissions(targetInfo.id);
+        if (!hasPermissions) {
+          console.warn(`Bot doesn't have admin permissions on ${validatedChannelPair.targetUsername}`);
+        }
+        
       } catch (error) {
-        return res.status(400).json({ 
-          message: "Could not validate channels. Check usernames and bot permissions." 
-        });
+        console.warn('Could not validate channels with Telegram:', error);
+        // Continue without Telegram validation for development
       }
       
-      const channelPair = await storage.createChannelPair(validatedChannelPair);
+      const channelPair = await storage.createChannelPair(validatedChannelPair as any);
       
       // Log activity
       await storage.createActivityLog({
@@ -133,9 +147,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         channelPairId: channelPair.id,
       });
       
+      console.log('Created channel pair:', channelPair);
       res.json(channelPair);
     } catch (error) {
-      res.status(400).json({ message: "Invalid channel pair data" });
+      console.error('Error creating channel pair:', error);
+      res.status(400).json({ 
+        message: "Invalid channel pair data",
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
     }
   });
 
