@@ -108,41 +108,8 @@ export class SchedulerService {
     // Remove the placeholder text that appears when media is not available (critical fix)
     content = content.replace(/📸\s*\[Медиа доступно в исходном канале\]/gi, '');
     
-    // Apply translation if enabled for this channel pair
-    if (channelPair.autoTranslate && content.length > 0) {
-      try {
-        const translationResult = await translationService.translateToRussian(content);
-        
-        if (translationResult.wasTranslated) {
-          content = translationResult.translatedText;
-          
-          // Log translation activity
-          await storage.createActivityLog({
-            type: 'content_translated',
-            description: `Content translated from ${translationResult.detectedLanguage} to Russian`,
-            channelPairId: post.channelPairId!,
-            postId: post.id,
-            metadata: {
-              originalLanguage: translationResult.detectedLanguage,
-              originalLength: translationResult.originalText.length,
-              translatedLength: translationResult.translatedText.length
-            }
-          });
-          
-          console.log(`🌐 Translated ${translationResult.detectedLanguage} → Russian for post ${post.id}`);
-        }
-      } catch (error) {
-        console.error(`❌ Translation failed for post ${post.id}:`, error);
-        
-        // Log translation failure but continue with original content
-        await storage.createActivityLog({
-          type: 'translation_failed',
-          description: `Translation failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
-          channelPairId: post.channelPairId!,
-          postId: post.id,
-        });
-      }
-    }
+    // Content is already translated during web parsing if auto-translate is enabled
+    // No additional translation needed here
     
     // Remove original channel mentions if configured
     if (channelPair.contentFilters?.removeChannelMentions) {
@@ -261,40 +228,8 @@ export class SchedulerService {
           // Process and translate content if needed
           let content = scheduledPost.content;
           
-          // Check if content needs translation
-          const autoTranslate = channelPair.autoTranslate || false;
-          
-          if (autoTranslate) {
-            try {
-              const translationResult = await translationService.translateToRussian(content);
-              if (translationResult.wasTranslated) {
-                content = translationResult.translatedText;
-                
-                // Log translation
-                await storage.createActivityLog({
-                  type: 'translation_success',
-                  description: `Scheduled post translated from ${translationResult.detectedLanguage} to Russian`,
-                  channelPairId: scheduledPost.channelPairId,
-                  metadata: {
-                    originalLanguage: translationResult.detectedLanguage,
-                    originalLength: translationResult.originalText.length,
-                    translatedLength: translationResult.translatedText.length
-                  }
-                });
-                
-                console.log(`🌐 Translated ${translationResult.detectedLanguage} → Russian for scheduled post ${scheduledPost.id}`);
-              }
-            } catch (error) {
-              console.error(`❌ Translation failed for scheduled post ${scheduledPost.id}:`, error);
-              
-              // Log translation failure but continue with original content
-              await storage.createActivityLog({
-                type: 'translation_failed',
-                description: `Translation failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
-                channelPairId: scheduledPost.channelPairId,
-              });
-            }
-          }
+          // Content is already translated during web parsing if auto-translate is enabled
+          // No additional translation needed here
 
           // Add custom branding if configured
           if (channelPair.customBranding) {
