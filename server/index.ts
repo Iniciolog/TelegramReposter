@@ -75,9 +75,13 @@ app.use((req, res, next) => {
     try {
       log("🔧 Starting background services...");
       
-      // Start web parsing service
+      // Start web channel parsing service
       const { webChannelParserService } = await import("./services/webChannelParser");
-      webChannelParserService.startParsing().catch(err => log("Web parser error:", String(err)));
+      webChannelParserService.startParsing().catch(err => log("Web channel parser error:", String(err)));
+
+      // Start web source parsing service
+      const { webSourceParserService } = await import("./services/webSourceParser");
+      webSourceParserService.startParsing().catch(err => log("Web source parser error:", String(err)));
 
       // Start scheduler service
       const { schedulerService } = await import("./services/scheduler");
