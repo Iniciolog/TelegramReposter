@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,7 @@ import { formatDistanceToNow } from "date-fns";
 import { ru } from "date-fns/locale";
 import { Edit, Trash2, Send, Eye, Filter, FileText } from "lucide-react";
 import type { DraftPost, ChannelPair } from "@shared/schema";
+import { useParsingStatus } from "@/hooks/useParsingStatus";
 
 export default function DraftsPage() {
   const { toast } = useToast();
@@ -23,6 +24,18 @@ export default function DraftsPage() {
   const [selectedChannelPair, setSelectedChannelPair] = useState<string>("all");
   const [editingDraft, setEditingDraft] = useState<DraftPost | null>(null);
   const [editedContent, setEditedContent] = useState("");
+  
+  // Listen for parsing status updates
+  const { statuses } = useParsingStatus();
+  
+  // Auto-refresh drafts when new drafts are created
+  useEffect(() => {
+    const draftCreatedStatuses = statuses.filter(status => status.type === 'draft_created');
+    if (draftCreatedStatuses.length > 0) {
+      // Invalidate queries to refresh the draft list
+      queryClient.invalidateQueries({ queryKey: ["/api/draft-posts"] });
+    }
+  }, [statuses, queryClient]);
 
   // Fetch channel pairs for filtering
   const { data: channelPairs = [] } = useQuery<ChannelPair[]>({
