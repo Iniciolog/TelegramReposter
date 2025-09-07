@@ -11,12 +11,15 @@ import {
   type InsertScheduledPost,
   type DraftPost,
   type InsertDraftPost,
+  type WebSource,
+  type InsertWebSource,
   channelPairs,
   posts,
   activityLogs,
   settings,
   scheduledPosts,
-  draftPosts
+  draftPosts,
+  webSources
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, lte, and, sql } from "drizzle-orm";
@@ -59,7 +62,14 @@ export interface IStorage {
   createDraftPost(post: InsertDraftPost): Promise<DraftPost>;
   updateDraftPost(id: string, post: Partial<InsertDraftPost>): Promise<DraftPost | undefined>;
   deleteDraftPost(id: string): Promise<boolean>;
-  getDraftPostByOriginalId(originalPostId: string, channelPairId: string): Promise<DraftPost | undefined>;
+  getDraftPostByOriginalId(originalPostId: string, channelPairId?: string, webSourceId?: string): Promise<DraftPost | undefined>;
+  
+  // Web Sources
+  getWebSources(): Promise<WebSource[]>;
+  getWebSource(id: string): Promise<WebSource | undefined>;
+  createWebSource(webSource: InsertWebSource): Promise<WebSource>;
+  updateWebSource(id: string, webSource: Partial<InsertWebSource>): Promise<WebSource | undefined>;
+  deleteWebSource(id: string): Promise<boolean>;
   
   // Analytics
   getStats(): Promise<{
@@ -367,17 +377,67 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async getDraftPostByOriginalId(originalPostId: string, channelPairId: string): Promise<DraftPost | undefined> {
+  async getDraftPostByOriginalId(originalPostId: string, channelPairId?: string, webSourceId?: string): Promise<DraftPost | undefined> {
+    let conditions = [eq(draftPosts.originalPostId, originalPostId)];
+    
+    if (channelPairId) {
+      conditions.push(eq(draftPosts.channelPairId, channelPairId));
+    }
+    
+    if (webSourceId) {
+      conditions.push(eq(draftPosts.webSourceId, webSourceId));
+    }
+    
     const [draft] = await db
       .select()
       .from(draftPosts)
-      .where(
-        and(
-          eq(draftPosts.originalPostId, originalPostId),
-          eq(draftPosts.channelPairId, channelPairId)
-        )
-      );
+      .where(and(...conditions));
     return draft;
+  }
+
+  // Web Sources
+  async getWebSources(): Promise<WebSource[]> {
+    return await db.select().from(webSources).orderBy(desc(webSources.createdAt));
+  }
+
+  async getWebSource(id: string): Promise<WebSource | undefined> {
+    const [webSource] = await db.select().from(webSources).where(eq(webSources.id, id));
+    return webSource;
+  }
+
+  async createWebSource(insertWebSource: InsertWebSource): Promise<WebSource> {
+    const [webSource] = await db
+      .insert(webSources)
+      .values({
+        ...insertWebSource,
+        isActive: insertWebSource.isActive ?? true,
+        parseInterval: insertWebSource.parseInterval ?? 60,
+      })
+      .returning();
+    return webSource;
+  }
+
+  async updateWebSource(id: string, updates: Partial<InsertWebSource>): Promise<WebSource | undefined> {
+    const [webSource] = await db
+      .update(webSources)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(webSources.id, id))
+      .returning();
+    return webSource || undefined;
+  }
+
+  async deleteWebSource(id: string): Promise<boolean> {
+    try {
+      // First delete related draft posts to avoid foreign key constraint violation
+      await db.delete(draftPosts).where(eq(draftPosts.webSourceId, id));
+      
+      // Then delete the web source
+      const result = await db.delete(webSources).where(eq(webSources.id, id));
+      return (result.rowCount ?? 0) > 0;
+    } catch (error) {
+      console.error('Error deleting web source:', error);
+      return false;
+    }
   }
 }
 
