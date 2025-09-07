@@ -5,8 +5,9 @@ import { telegramService } from "./services/telegram";
 import { schedulerService } from "./services/scheduler";
 import { channelParserService } from "./services/channelParser";
 import { webChannelParserService } from "./services/webChannelParser";
+import { webSourceParserService } from "./services/webSourceParser";
 import { translationService } from "./services/translationService";
-import { insertChannelPairSchema, insertSettingsSchema, insertScheduledPostSchema, insertDraftPostSchema } from "@shared/schema";
+import { insertChannelPairSchema, insertSettingsSchema, insertScheduledPostSchema, insertDraftPostSchema, insertWebSourceSchema } from "@shared/schema";
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -52,6 +53,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         // Start web parsing service for truly public channels
         await webChannelParserService.startParsing();
+        
+        // Start web source parsing service for RSS/HTML content
+        await webSourceParserService.startParsing();
         
         console.log('🚀 Channel monitoring, parsing and web scraping services started');
       }
@@ -517,6 +521,127 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Error publishing draft post:', error);
       res.status(500).json({ message: "Failed to publish draft post" });
+    }
+  });
+
+  // Web Sources routes
+  app.get("/api/web-sources", async (req, res) => {
+    try {
+      const webSources = await storage.getWebSources();
+      res.json(webSources);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to get web sources" });
+    }
+  });
+
+  app.get("/api/web-sources/:id", async (req, res) => {
+    try {
+      const webSource = await storage.getWebSource(req.params.id);
+      if (!webSource) {
+        return res.status(404).json({ message: "Web source not found" });
+      }
+      res.json(webSource);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to get web source" });
+    }
+  });
+
+  app.post("/api/web-sources", async (req, res) => {
+    try {
+      const validatedWebSource = insertWebSourceSchema.parse(req.body);
+      const webSource = await storage.createWebSource(validatedWebSource);
+      
+      // Log activity
+      await storage.createActivityLog({
+        type: 'web_source_created',
+        description: `Web source created: ${webSource.name} (${webSource.type})`,
+      });
+      
+      res.status(201).json(webSource);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ 
+          message: "Invalid web source data",
+          errors: error.issues.map(issue => `${issue.path.join('.')}: ${issue.message}`)
+        });
+      } else {
+        res.status(500).json({ message: "Failed to create web source" });
+      }
+    }
+  });
+
+  app.patch("/api/web-sources/:id", async (req, res) => {
+    try {
+      const validatedUpdates = insertWebSourceSchema.partial().parse(req.body);
+      const webSource = await storage.updateWebSource(req.params.id, validatedUpdates);
+      
+      if (!webSource) {
+        return res.status(404).json({ message: "Web source not found" });
+      }
+      
+      // Log activity
+      await storage.createActivityLog({
+        type: 'web_source_updated',
+        description: `Web source updated: ${webSource.name}`,
+      });
+      
+      res.json(webSource);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ 
+          message: "Invalid update data",
+          errors: error.issues.map(issue => `${issue.path.join('.')}: ${issue.message}`)
+        });
+      } else {
+        res.status(500).json({ message: "Failed to update web source" });
+      }
+    }
+  });
+
+  app.delete("/api/web-sources/:id", async (req, res) => {
+    try {
+      const webSource = await storage.getWebSource(req.params.id);
+      if (!webSource) {
+        return res.status(404).json({ message: "Web source not found" });
+      }
+
+      const success = await storage.deleteWebSource(req.params.id);
+      
+      if (!success) {
+        return res.status(500).json({ message: "Failed to delete web source" });
+      }
+
+      // Log activity
+      await storage.createActivityLog({
+        type: 'web_source_deleted',
+        description: `Web source deleted: ${webSource.name}`,
+      });
+      
+      res.json({ message: "Web source deleted successfully" });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to delete web source" });
+    }
+  });
+
+  app.post("/api/web-sources/:id/parse", async (req, res) => {
+    try {
+      await webSourceParserService.parseSourceManually(req.params.id);
+      
+      const webSource = await storage.getWebSource(req.params.id);
+      
+      // Log activity
+      await storage.createActivityLog({
+        type: 'web_source_parsed',
+        description: `Manual parsing triggered for: ${webSource?.name}`,
+      });
+      
+      res.json({ message: "Web source parsing triggered successfully" });
+    } catch (error) {
+      console.error('Manual web source parsing error:', error);
+      res.status(500).json({ 
+        message: "Failed to parse web source",
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
   });
 
