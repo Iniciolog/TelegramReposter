@@ -70,9 +70,25 @@ export const scheduledPosts = pgTable("scheduled_posts", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Web sources for parsing external websites
+export const webSources = pgTable("web_sources", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  url: text("url").notNull(),
+  type: text("type").notNull().default("rss"), // rss, html
+  selector: text("selector"), // CSS selector for HTML parsing
+  lastParsed: timestamp("last_parsed"),
+  isActive: boolean("is_active").default(true),
+  parseInterval: integer("parse_interval").default(60), // minutes
+  targetChannelId: varchar("target_channel_id"), // Optional target channel for auto-posting
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 export const draftPosts = pgTable("draft_posts", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  channelPairId: varchar("channel_pair_id").references(() => channelPairs.id).notNull(),
+  channelPairId: varchar("channel_pair_id").references(() => channelPairs.id),
+  webSourceId: varchar("web_source_id").references(() => webSources.id),
   originalPostId: text("original_post_id").notNull(),
   originalContent: text("original_content"), // Original content before translation/editing
   content: text("content"), // Current edited content
@@ -82,6 +98,7 @@ export const draftPosts = pgTable("draft_posts", {
   originalLanguage: text("original_language"),
   publishedPostId: text("published_post_id"),
   publishedAt: timestamp("published_at"),
+  sourceUrl: text("source_url"), // Original URL for web-sourced content
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -123,6 +140,13 @@ export const insertDraftPostSchema = createInsertSchema(draftPosts).omit({
   publishedAt: true,
 });
 
+export const insertWebSourceSchema = createInsertSchema(webSources).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  lastParsed: true,
+});
+
 // Types
 export type ChannelPair = typeof channelPairs.$inferSelect;
 export type InsertChannelPair = z.infer<typeof insertChannelPairSchema>;
@@ -141,3 +165,6 @@ export type InsertScheduledPost = z.infer<typeof insertScheduledPostSchema>;
 
 export type DraftPost = typeof draftPosts.$inferSelect;
 export type InsertDraftPost = z.infer<typeof insertDraftPostSchema>;
+
+export type WebSource = typeof webSources.$inferSelect;
+export type InsertWebSource = z.infer<typeof insertWebSourceSchema>;
