@@ -19,6 +19,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { insertWebSourceSchema, type WebSource, type InsertWebSource } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
 import { format } from "date-fns";
+import { ParseStatusDisplay } from "@/components/ParseStatusDisplay";
 
 interface CreateWebSourceFormData extends InsertWebSource {}
 
@@ -167,12 +168,17 @@ export default function WebSources() {
       
       <div className="flex-1 flex flex-col overflow-hidden">
         <header className="bg-card border-b border-border px-6 py-4">
-          <div className="flex justify-between items-center">
-            <div>
-              <h1 className="text-2xl font-bold">Web Sources</h1>
-              <p className="text-muted-foreground">
-                Manage RSS feeds and HTML parsing sources for content automation
-              </p>
+          <div className="flex justify-between items-start">
+            <div className="flex-1">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h1 className="text-2xl font-bold">Web Sources</h1>
+                  <p className="text-muted-foreground">
+                    Manage RSS feeds and HTML parsing sources for content automation
+                  </p>
+                </div>
+                <ParseStatusDisplay compact className="mr-4" />
+              </div>
             </div>
             
             <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
