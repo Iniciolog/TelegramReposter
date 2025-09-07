@@ -12,20 +12,20 @@ export default function Dashboard() {
   const { t } = useLanguage();
   
   return (
-    <div className="flex h-screen bg-background overflow-x-hidden max-w-full">
+    <div className="flex h-screen bg-background">
       <Sidebar />
       
-      <div className="flex-1 flex flex-col overflow-hidden lg:ml-0 min-w-0">
+      <div className="flex-1 flex flex-col overflow-hidden lg:ml-0">
         {/* Header */}
-        <header className="bg-card border-b border-border px-4 lg:px-6 py-4 flex-shrink-0">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex-1 lg:pl-0 pl-12 min-w-0">
-              <h1 className="text-xl lg:text-2xl font-bold truncate">{t('dashboard.title')}</h1>
+        <header className="bg-card border-b border-border px-4 lg:px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex-1 lg:pl-0 pl-12">
+              <h1 className="text-xl lg:text-2xl font-bold">{t('dashboard.title')}</h1>
               <p className="text-muted-foreground text-sm lg:text-base">
                 {t('dashboard.subtitle')}
               </p>
             </div>
-            <div className="flex items-center space-x-2 lg:space-x-4 flex-shrink-0">
+            <div className="flex items-center space-x-2 lg:space-x-4">
               <Button 
                 variant="ghost" 
                 size="icon" 
@@ -47,19 +47,19 @@ export default function Dashboard() {
         </header>
 
         {/* Main Content */}
-        <main className="flex-1 overflow-auto p-4 lg:p-6 min-w-0">
+        <main className="flex-1 overflow-auto p-4 lg:p-6">
           <StatusCards />
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6 mb-6 lg:mb-8">
-            <div className="lg:col-span-2 min-w-0">
+            <div className="lg:col-span-2">
               <ChannelPairs />
             </div>
-            <div className="min-w-0">
+            <div>
               <RecentActivity />
             </div>
           </div>
 
-          <div className="mb-8 min-w-0">
+          <div className="mb-8">
             <PerformanceChart />
           </div>
 
