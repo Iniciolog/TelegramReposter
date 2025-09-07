@@ -166,29 +166,29 @@ export default function WebSources() {
     <div className="flex h-screen bg-background">
       <Sidebar />
       
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="bg-card border-b border-border px-6 py-4">
-          <div className="flex justify-between items-start">
-            <div className="flex-1">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h1 className="text-2xl font-bold">Web Sources</h1>
-                  <p className="text-muted-foreground">
+      <div className="flex-1 flex flex-col overflow-hidden lg:ml-0">
+        <header className="bg-card border-b border-border px-4 lg:px-6 py-4">
+          <div className="flex flex-col lg:flex-row justify-between items-start gap-4">
+            <div className="flex-1 lg:pl-0 pl-12">
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                <div className="flex-1">
+                  <h1 className="text-xl lg:text-2xl font-bold">Web Sources</h1>
+                  <p className="text-muted-foreground text-sm lg:text-base">
                     Manage RSS feeds and HTML parsing sources for content automation
                   </p>
                 </div>
-                <ParseStatusDisplay compact className="mr-4" />
+                <ParseStatusDisplay compact className="lg:mr-4" />
               </div>
             </div>
             
             <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
               <DialogTrigger asChild>
-                <Button data-testid="button-add-web-source">
+                <Button size="sm" className="hidden sm:flex" data-testid="button-add-web-source">
                   <Plus className="h-4 w-4 mr-2" />
                   Add Web Source
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-2xl">
+              <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>Add New Web Source</DialogTitle>
                 </DialogHeader>
@@ -333,9 +333,9 @@ export default function WebSources() {
           </div>
         </header>
 
-        <main className="flex-1 overflow-auto p-6">
+        <main className="flex-1 overflow-auto p-4 lg:p-6">
           {isLoading ? (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {[...Array(3)].map((_, i) => (
                 <Card key={i} className="animate-pulse">
                   <CardHeader className="space-y-2">
@@ -366,7 +366,7 @@ export default function WebSources() {
               </CardContent>
             </Card>
           ) : (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {webSources.map((webSource) => (
                 <Card key={webSource.id} className="relative">
                   <CardHeader className="pb-3">
@@ -478,7 +478,7 @@ export default function WebSources() {
           
           {/* Edit Dialog */}
           <Dialog open={!!editingWebSource} onOpenChange={() => setEditingWebSource(null)}>
-            <DialogContent className="max-w-2xl">
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Edit Web Source</DialogTitle>
               </DialogHeader>
@@ -622,6 +622,16 @@ export default function WebSources() {
           </Dialog>
         </main>
       </div>
+
+      {/* Mobile FAB */}
+      <Button
+        size="icon"
+        className="sm:hidden fixed bottom-6 right-6 h-14 w-14 rounded-full shadow-lg z-40"
+        onClick={() => setIsCreateDialogOpen(true)}
+        data-testid="button-add-web-source-mobile"
+      >
+        <Plus className="h-6 w-6" />
+      </Button>
     </div>
   );
 }

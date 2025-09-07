@@ -220,20 +220,20 @@ export default function DraftsPage() {
   }
 
   return (
-    <div className="container mx-auto py-6 space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="container mx-auto py-4 lg:py-6 space-y-4 lg:space-y-6">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Черновики</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-2xl lg:text-3xl font-bold tracking-tight">Черновики</h1>
+          <p className="text-muted-foreground text-sm lg:text-base">
             Управляйте черновиками постов перед публикацией
           </p>
         </div>
         
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 lg:gap-4">
+          <div className="flex items-center gap-2 w-full sm:w-auto">
             <Filter className="h-4 w-4" />
             <Select value={selectedChannelPair} onValueChange={setSelectedChannelPair}>
-              <SelectTrigger className="w-64" data-testid="filter-channel-pairs">
+              <SelectTrigger className="w-full sm:w-64" data-testid="filter-channel-pairs">
                 <SelectValue placeholder="Фильтр по каналам" />
               </SelectTrigger>
               <SelectContent>
@@ -247,7 +247,7 @@ export default function DraftsPage() {
             </Select>
           </div>
           
-          <Badge variant="secondary" className="flex items-center gap-1">
+          <Badge variant="secondary" className="flex items-center gap-1 whitespace-nowrap">
             <FileText className="h-3 w-3" />
             {drafts.length} черновиков
           </Badge>
@@ -255,18 +255,14 @@ export default function DraftsPage() {
       </div>
 
       {drafts.length > 0 && (
-        <div className="flex items-center justify-between gap-4 p-4 bg-muted/50 rounded-lg">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-3 lg:p-4 bg-muted/50 rounded-lg">
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
               <Checkbox
                 checked={isAllSelected}
-                ref={(ref) => {
-                  if (ref) {
-                    ref.indeterminate = isPartialSelected;
-                  }
-                }}
                 onCheckedChange={handleSelectAll}
                 data-testid="checkbox-select-all"
+                className={isPartialSelected ? "data-[state=checked]:bg-primary/50" : ""}
               />
               <span className="text-sm font-medium">
                 {selectedDrafts.size === 0 
@@ -278,7 +274,7 @@ export default function DraftsPage() {
           </div>
           
           {selectedDrafts.size > 0 && (
-            <div className="flex items-center gap-2">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full sm:w-auto">
               <AlertDialog>
                 <AlertDialogTrigger asChild>
                   <Button 
@@ -286,9 +282,11 @@ export default function DraftsPage() {
                     size="sm"
                     disabled={bulkDeleteMutation.isPending}
                     data-testid="button-bulk-delete"
+                    className="w-full sm:w-auto"
                   >
                     <Trash2 className="h-4 w-4 mr-1" />
-                    Удалить выбранные ({selectedDrafts.size})
+                    <span className="hidden sm:inline">Удалить выбранные ({selectedDrafts.size})</span>
+                    <span className="sm:hidden">Удалить ({selectedDrafts.size})</span>
                   </Button>
                 </AlertDialogTrigger>
                 <AlertDialogContent>
