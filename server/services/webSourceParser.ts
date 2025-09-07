@@ -193,7 +193,7 @@ export class WebSourceParserService {
     try {
       const response = await axios.get(webSource.url, {
         headers: {
-          'User-Agent': 'Mozilla/5.0 (compatible; TelegramBot/1.0)',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
         },
         timeout: 10000,
       });
@@ -201,13 +201,31 @@ export class WebSourceParserService {
       const $ = cheerio.load(response.data);
       const items: ParsedWebItem[] = [];
       
-      if (!webSource.selector) {
-        console.warn(`HTML selector not defined for ${webSource.name}`);
-        return [];
-      }
+      // If no selector provided, try common article selectors
+      const selectors = webSource.selector ? 
+        [webSource.selector] : 
+        [
+          'article', 
+          '.article', 
+          '.post', 
+          '.news-item', 
+          '.entry', 
+          '.content-item',
+          'main article',
+          '[role="article"]',
+          'h1, h2, h3', // Fallback to headings
+        ];
       
-      // Use the CSS selector to find content elements
-      $(webSource.selector).each((index, element) => {
+      console.log(`🔍 HTML parsing ${webSource.name}: trying selectors [${selectors.join(', ')}]`);
+      
+      // Try each selector until we find content
+      for (const selector of selectors) {
+        const elements = $(selector);
+        console.log(`   → Selector "${selector}": found ${elements.length} elements`);
+        
+        if (elements.length === 0) continue;
+        
+        elements.each((index, element) => {
         const $el = $(element);
         
         // Try to extract title from various elements
@@ -230,17 +248,29 @@ export class WebSourceParserService {
         // Extract images
         const images = this.extractImagesFromElement($el);
         
-        if (content && content.length > 50) { // Only process substantial content
-          items.push({
-            id: `${webSource.id}-${index}-${Date.now()}`,
-            title,
-            content: this.cleanContent(content),
-            url: absoluteUrl,
-            publishedDate: new Date(),
-            images,
-          });
+          if (content && content.length > 50) { // Only process substantial content
+            console.log(`   ✅ Found content: "${title.substring(0, 50)}..."`);
+            items.push({
+              id: `${webSource.id}-${index}-${Date.now()}`,
+              title,
+              content: this.cleanContent(content),
+              url: absoluteUrl,
+              publishedDate: new Date(),
+              images,
+            });
+          }
+        });
+        
+        // If we found items with this selector, stop trying others
+        if (items.length > 0) {
+          console.log(`   ✅ Using selector "${selector}": found ${items.length} items`);
+          break;
         }
-      });
+      }
+      
+      if (items.length === 0) {
+        console.log(`   ❌ No content found with any selector on ${webSource.url}`);
+      }
       
       return items.slice(0, 5); // Limit to 5 items for HTML parsing
       
