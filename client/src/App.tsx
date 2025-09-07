@@ -11,6 +11,7 @@ import ContentFilters from "@/pages/content-filters";
 import Branding from "@/pages/branding";
 import Scheduler from "@/pages/scheduler";
 import Drafts from "@/pages/drafts";
+import WebSources from "@/pages/web-sources";
 import Analytics from "@/pages/analytics";
 import ActivityLogs from "@/pages/activity-logs";
 import Settings from "@/pages/settings";
@@ -24,6 +25,7 @@ function Router() {
       <Route path="/branding" component={Branding} />
       <Route path="/scheduler" component={Scheduler} />
       <Route path="/drafts" component={Drafts} />
+      <Route path="/web-sources" component={WebSources} />
       <Route path="/analytics" component={Analytics} />
       <Route path="/activity-logs" component={ActivityLogs} />
       <Route path="/settings" component={Settings} />

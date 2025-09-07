@@ -494,7 +494,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Draft post not found" });
       }
       
-      // Create scheduled post from draft
+      // Create scheduled post from draft (skip if no channel pair for web sources)
+      if (!draft.channelPairId) {
+        return res.status(400).json({ message: "Cannot publish draft from web source directly. Use drafts to manually schedule." });
+      }
+
       const scheduledPost = await storage.createScheduledPost({
         channelPairId: draft.channelPairId,
         title: `Published draft: ${draft.content?.substring(0, 30)}...`,

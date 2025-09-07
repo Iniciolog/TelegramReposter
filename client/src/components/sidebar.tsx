@@ -11,7 +11,8 @@ import {
   User,
   LogOut,
   Wifi,
-  FileText
+  FileText,
+  Globe
 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { LanguageSwitcher } from "./language-switcher";
@@ -46,6 +47,11 @@ const navigation = [
     name: "nav.drafts",
     href: "/drafts",
     icon: FileText,
+  },
+  {
+    name: "nav.web-sources",
+    href: "/web-sources",
+    icon: Globe,
   },
   {
     name: "nav.analytics",
