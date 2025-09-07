@@ -9,7 +9,6 @@ import { webSourceParserService } from "./services/webSourceParser";
 import { translationService } from "./services/translationService";
 import { insertChannelPairSchema, insertSettingsSchema, insertScheduledPostSchema, insertDraftPostSchema, insertWebSourceSchema } from "@shared/schema";
 import { z } from "zod";
-import { wsManager } from "./websocket";
 import { aiContentAnalyzer } from "./services/aiContentAnalyzer";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -638,90 +637,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Web source not found" });
       }
 
-      res.json({ message: "AI parsing started", webSourceId });
-
-      // Start AI-enhanced parsing with progress updates
-      (async () => {
-        try {
-          wsManager.sendParsingProgress(webSourceId, {
-            status: 'analyzing',
-            message: 'Начинаю парсинг с ИИ-анализом...',
-            progress: 0
-          });
-
-          // First, get content using existing parser
-          await webSourceParserService.parseSourceManually(webSourceId);
-          
-          // Then fetch the raw HTML content
-          const axios = await import('axios');
-          const response = await axios.default.get(webSource.url, {
-            timeout: 30000,
-            headers: {
-              'User-Agent': 'Mozilla/5.0 (compatible; ContentParser/1.0)'
-            }
-          });
-
-          // AI analysis with progress tracking
-          const analyzedContent = await aiContentAnalyzer.analyzeAndCleanContent(
-            webSource.url,
-            response.data,
-            (progress) => {
-              wsManager.sendParsingProgress(webSourceId, progress);
-            }
-          );
-
-          // Save as draft if content is valuable
-          if (analyzedContent.isValuable && analyzedContent.valueScore > 30) {
-            const draft = await storage.createDraftPost({
-              originalPostId: `web_${webSourceId}_${Date.now()}`,
-              content: `${analyzedContent.title}\n\n${analyzedContent.telegramContent}`,
-              originalContent: analyzedContent.content,
-              mediaUrls: analyzedContent.images,
-              sourceUrl: analyzedContent.sourceUrl,
-              webSourceId: webSourceId,
-              status: 'draft'
-            });
-
-            wsManager.sendParsingResult(webSourceId, {
-              success: true,
-              draft,
-              analyzedContent,
-              message: 'Контент проанализирован и сохранен как черновик!'
-            });
-
-            // Log activity
-            await storage.createActivityLog({
-              type: 'web_source_parsed',
-              description: `AI parsing completed for: ${webSource.name}. Draft created: ${analyzedContent.title}`,
-            });
-          } else {
-            wsManager.sendParsingResult(webSourceId, {
-              success: false,
-              analyzedContent,
-              message: 'Контент не достаточно ценный для публикации'
-            });
-
-            // Log activity
-            await storage.createActivityLog({
-              type: 'web_source_parsed',
-              description: `AI parsing completed for: ${webSource.name}. Content not valuable (score: ${analyzedContent.valueScore})`,
-            });
+      // Start AI-enhanced parsing
+      try {
+        // First, get content using existing parser
+        await webSourceParserService.parseSourceManually(webSourceId);
+        
+        // Then fetch the raw HTML content for AI analysis
+        const axios = await import('axios');
+        const response = await axios.default.get(webSource.url, {
+          timeout: 30000,
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (compatible; ContentParser/1.0)'
           }
+        });
 
-        } catch (error) {
-          console.error('AI parsing error:', error);
-          wsManager.sendParsingProgress(webSourceId, {
-            status: 'error',
-            message: 'Ошибка при анализе контента',
-            progress: 0
+        // AI analysis
+        const analyzedContent = await aiContentAnalyzer.analyzeAndCleanContent(
+          webSource.url,
+          response.data
+        );
+
+        // Save as draft if content is valuable
+        if (analyzedContent.isValuable && analyzedContent.valueScore > 30) {
+          const draft = await storage.createDraftPost({
+            originalPostId: `web_${webSourceId}_${Date.now()}`,
+            content: `${analyzedContent.title}\n\n${analyzedContent.telegramContent}`,
+            originalContent: analyzedContent.content,
+            mediaUrls: analyzedContent.images,
+            sourceUrl: analyzedContent.sourceUrl,
+            webSourceId: webSourceId,
+            status: 'draft'
           });
 
-          wsManager.sendParsingResult(webSourceId, {
+          // Log activity
+          await storage.createActivityLog({
+            type: 'web_source_parsed',
+            description: `AI parsing completed for: ${webSource.name}. Draft created: ${analyzedContent.title}`,
+          });
+
+          res.json({ 
+            message: "ИИ-анализ завершен! Контент сохранен как черновик.", 
+            success: true,
+            draft,
+            analyzedContent
+          });
+
+        } else {
+          // Log activity
+          await storage.createActivityLog({
+            type: 'web_source_parsed',
+            description: `AI parsing completed for: ${webSource.name}. Content not valuable (score: ${analyzedContent.valueScore})`,
+          });
+
+          res.json({ 
+            message: `Контент не достаточно ценный для публикации (оценка: ${analyzedContent.valueScore}/100)`, 
             success: false,
-            message: 'Ошибка парсинга: ' + (error instanceof Error ? error.message : String(error))
+            analyzedContent
           });
         }
-      })();
+
+      } catch (error) {
+        console.error('AI parsing error:', error);
+        res.status(500).json({ 
+          message: "Ошибка ИИ-анализа: " + (error instanceof Error ? error.message : String(error)),
+          success: false
+        });
+      }
 
     } catch (error) {
       console.error('Manual web source parsing error:', error);
@@ -758,9 +739,5 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   const httpServer = createServer(app);
-  
-  // Initialize WebSocket server
-  wsManager.initialize(httpServer);
-  
   return httpServer;
 }
