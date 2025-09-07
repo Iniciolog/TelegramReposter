@@ -43,8 +43,8 @@ export class AIContentAnalyzer {
     // Parse HTML
     const $ = cheerio.load(htmlContent);
     
-    // Remove unnecessary elements
-    $('script, style, nav, header, footer, aside, .advertisement, .ads, .cookie-banner').remove();
+    // Эта функция теперь вызывается дважды - уберем дублирование удаления элементов
+    // (удаление происходит внутри extractMainContent)
     
     onProgress?.({
       status: 'extracting',
@@ -54,6 +54,7 @@ export class AIContentAnalyzer {
 
     // Extract content
     const rawContent = this.extractMainContent($);
+    console.log(`Общий размер извлеченного контента: ${rawContent.length} символов`);
     const images = this.extractImages($, url);
     
     onProgress?.({
@@ -95,27 +96,66 @@ export class AIContentAnalyzer {
   }
 
   private extractMainContent($: cheerio.CheerioAPI): string {
-    // Try different content selectors
-    const contentSelectors = [
-      'article',
-      '.content',
-      '.post-content',
-      '.entry-content', 
-      '.article-content',
-      'main',
-      '[role="main"]',
-      '.main-content',
-      'body'
-    ];
-
-    for (const selector of contentSelectors) {
-      const content = $(selector).first();
-      if (content.length && content.text().trim().length > 200) {
-        return content.html() || '';
+    // Убираем ненужные элементы, но сохраняем скрытый контент
+    $('script, style, nav, header, footer, aside, .advertisement, .ads, .cookie-banner, .popup, .modal').remove();
+    
+    // Раскрываем скрытый контент - убираем атрибуты, которые могут скрывать текст
+    $('[style*="display: none"], [style*="display:none"]').removeAttr('style');
+    $('.hidden, .d-none, .hide').removeClass('hidden d-none hide');
+    $('[hidden]').removeAttr('hidden');
+    
+    // Извлекаем текст из всех возможных источников
+    const textSources: string[] = [];
+    
+    // 1. Заголовки всех уровней
+    $('h1, h2, h3, h4, h5, h6').each((i, el) => {
+      const text = $(el).text().trim();
+      if (text.length > 5) textSources.push(text);
+    });
+    
+    // 2. Параграфы и текстовые блоки
+    $('p, div, span, section, article').each((i, el) => {
+      const $el = $(el);
+      // Берем только прямой текст без вложенных элементов
+      const directText = $el.clone().children().remove().end().text().trim();
+      if (directText.length > 20) {
+        textSources.push(directText);
       }
-    }
-
-    return $('body').html() || '';
+    });
+    
+    // 3. Списки
+    $('li').each((i, el) => {
+      const text = $(el).text().trim();
+      if (text.length > 10) textSources.push('• ' + text);
+    });
+    
+    // 4. Таблицы
+    $('td, th').each((i, el) => {
+      const text = $(el).text().trim();
+      if (text.length > 5) textSources.push(text);
+    });
+    
+    // 5. Контент в data-атрибутах (часто скрытый текст)
+    $('[data-content], [data-text], [data-description]').each((i, el) => {
+      const $el = $(el);
+      const dataContent = $el.attr('data-content') || $el.attr('data-text') || $el.attr('data-description');
+      if (dataContent && dataContent.length > 20) {
+        textSources.push(dataContent);
+      }
+    });
+    
+    // 6. Alt-тексты изображений
+    $('img[alt]').each((i, el) => {
+      const alt = $(el).attr('alt');
+      if (alt && alt.length > 10) textSources.push(`[Изображение: ${alt}]`);
+    });
+    
+    // Объединяем весь найденный текст
+    const fullText = textSources.join('\n\n');
+    
+    console.log(`Извлечено текста: ${fullText.length} символов из ${textSources.length} источников`);
+    
+    return fullText;
   }
 
   private extractImages($: cheerio.CheerioAPI, baseUrl: string): string[] {
@@ -233,7 +273,7 @@ URL: ${url}
       // Fallback basic analysis
       const $ = cheerio.load(htmlContent);
       const title = $('h1').first().text() || $('title').text() || 'Без заголовка';
-      const content = $('p').map((i, el) => $(el).text()).get().join('\n\n');
+      const content = this.extractMainContent($);
       
       // Более щедрый fallback анализ
       const wordCount = content.split(/\s+/).filter(word => word.length > 2).length;
