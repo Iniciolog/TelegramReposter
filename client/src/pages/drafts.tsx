@@ -214,7 +214,7 @@ export default function DraftsPage() {
                 <div className="flex items-center justify-between">
                   <div className="space-y-1">
                     <CardTitle className="text-lg">
-                      {getChannelPairName(draft.channelPairId)}
+                      {getChannelPairName(draft.channelPairId || '')}
                     </CardTitle>
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                       <span>ID поста: {draft.originalPostId}</span>
