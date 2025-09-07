@@ -1,4 +1,6 @@
 import type { Express } from "express";
+import path from "path";
+import fs from "fs";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { telegramService } from "./services/telegram";
@@ -730,6 +732,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
         error: error instanceof Error ? error.message : String(error)
       });
     }
+  });
+
+  // Protected download endpoint
+  app.post("/api/download/deployment", (req, res) => {
+    const { password } = req.body;
+    
+    if (password !== "1111") {
+      return res.status(401).json({ error: "Неверный пароль" });
+    }
+
+    const filePath = path.join(__dirname, "../telegram-autoposter-deployment.zip");
+    
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: "Файл не найден" });
+    }
+
+    res.download(filePath, "telegram-autoposter-deployment.zip", (err) => {
+      if (err) {
+        console.error("Download error:", err);
+        res.status(500).json({ error: "Ошибка скачивания файла" });
+      }
+    });
   });
 
   const httpServer = createServer(app);

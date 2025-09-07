@@ -14,12 +14,24 @@ import {
   FileText,
   Globe,
   Menu,
-  X
+  X,
+  Download
 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { LanguageSwitcher } from "./language-switcher";
 import { Button } from "@/components/ui/button";
 import { useState, useEffect } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useToast } from "@/hooks/use-toast";
+import { Separator } from "@/components/ui/separator";
 
 const navigation = [
   {
@@ -82,6 +94,10 @@ export function Sidebar({ className }: SidebarProps = {}) {
   const [location] = useLocation();
   const { t } = useLanguage();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isDownloadDialogOpen, setIsDownloadDialogOpen] = useState(false);
+  const [password, setPassword] = useState("");
+  const [isDownloading, setIsDownloading] = useState(false);
+  const { toast } = useToast();
 
   // Close mobile menu on route change
   useEffect(() => {
@@ -102,6 +118,60 @@ export function Sidebar({ className }: SidebarProps = {}) {
       return () => document.removeEventListener('click', handleClickOutside);
     }
   }, [isMobileMenuOpen]);
+
+  const handleDownload = async () => {
+    if (!password) {
+      toast({
+        title: "Ошибка",
+        description: "Введите пароль",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsDownloading(true);
+    try {
+      const response = await fetch("/api/download/deployment", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ password }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Ошибка скачивания");
+      }
+
+      // Create download
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "telegram-autoposter-deployment.zip";
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      toast({
+        title: "Успех",
+        description: "Архив скачан успешно",
+      });
+
+      setIsDownloadDialogOpen(false);
+      setPassword("");
+    } catch (error) {
+      toast({
+        title: "Ошибка",
+        description: error instanceof Error ? error.message : "Неизвестная ошибка",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDownloading(false);
+    }
+  };
 
   const SidebarContent = () => (
     <div className={cn("w-64 bg-card border-r border-border flex flex-col h-screen", className)}>
@@ -142,6 +212,61 @@ export function Sidebar({ className }: SidebarProps = {}) {
           })}
         </ul>
       </nav>
+
+      {/* Protected Download Section */}
+      <div className="p-4 border-t border-border">
+        <Dialog open={isDownloadDialogOpen} onOpenChange={setIsDownloadDialogOpen}>
+          <DialogTrigger asChild>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="w-full flex items-center justify-center gap-2"
+              data-testid="button-protected-download"
+            >
+              <Download className="h-4 w-4" />
+              Скачать архив
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Скачать развертывание</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="password">Пароль доступа</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  placeholder="Введите пароль"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleDownload()}
+                  data-testid="input-download-password"
+                />
+              </div>
+              <div className="flex justify-end space-x-2">
+                <Button 
+                  variant="outline" 
+                  onClick={() => {
+                    setIsDownloadDialogOpen(false);
+                    setPassword("");
+                  }}
+                  data-testid="button-cancel-download"
+                >
+                  Отмена
+                </Button>
+                <Button 
+                  onClick={handleDownload}
+                  disabled={isDownloading}
+                  data-testid="button-confirm-download"
+                >
+                  {isDownloading ? "Скачивание..." : "Скачать"}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
 
       {/* Language Switcher */}
       <div className="p-4 border-t border-border">
