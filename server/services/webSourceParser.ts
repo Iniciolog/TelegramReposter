@@ -6,6 +6,7 @@ import { db } from '../db';
 import { webSources } from '../../shared/schema';
 import { eq } from 'drizzle-orm';
 import type { WebSource } from '../../shared/schema';
+import { webSocketService } from './websocketService';
 
 interface ParsedWebItem {
   id: string;
@@ -70,6 +71,9 @@ export class WebSourceParserService {
     try {
       console.log(`🔍 Parsing web source: ${webSource.name} (${webSource.type})`);
       
+      // Notify WebSocket clients that parsing started
+      webSocketService.webParsingStarted(webSource.id, webSource.name, webSource.type as 'rss' | 'html');
+      
       let items: ParsedWebItem[] = [];
       
       if (webSource.type === 'rss') {
@@ -80,9 +84,14 @@ export class WebSourceParserService {
       
       console.log(`📋 Found ${items.length} items from ${webSource.name}`);
       
+      // Notify WebSocket clients about parsing progress
+      webSocketService.webParsingProgress(webSource.id, webSource.name, items.length);
+      
       // Process new items
+      let processedCount = 0;
       for (const item of items) {
         await this.processWebItem(item, webSource);
+        processedCount++;
       }
       
       // Update last parsed timestamp (direct DB update since lastParsed is not in InsertWebSource)
@@ -91,9 +100,15 @@ export class WebSourceParserService {
         updatedAt: new Date() 
       }).where(eq(webSources.id, webSource.id));
       
+      // Notify WebSocket clients that parsing completed
+      webSocketService.webParsingCompleted(webSource.id, webSource.name, processedCount);
+      
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       console.error(`❌ Error parsing web source ${webSource.name}:`, errorMessage);
+      
+      // Notify WebSocket clients about the error
+      webSocketService.parsingError(webSource.name, errorMessage);
       
       await storage.createActivityLog({
         type: 'web_parsing_failed',
@@ -336,6 +351,9 @@ export class WebSourceParserService {
       });
 
       console.log(`📝 Created draft from web source: ${draftPost.id}`);
+      
+      // Notify WebSocket clients about new draft
+      webSocketService.draftCreated(webSource.name, item.title);
 
       // Log activity
       await storage.createActivityLog({

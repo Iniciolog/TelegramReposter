@@ -4,6 +4,7 @@ import { storage } from '../storage';
 import { schedulerService } from './scheduler';
 import { translationService } from './translationService';
 import type { ChannelPair } from '../../shared/schema';
+import { webSocketService } from './websocketService';
 
 interface WebMessage {
   messageId: number;
@@ -69,11 +70,15 @@ export class WebChannelParserService {
       
       console.log(`🔍 Web parsing channel: ${sourceUsername}`);
       
+      // Notify WebSocket clients that channel parsing started
+      webSocketService.channelParsingStarted(channelPair.sourceName);
+      
       // Get channel messages from t.me web interface
       const messages = await this.getChannelMessagesWeb(sourceUsername);
       
       if (!messages || messages.length === 0) {
         console.log(`📭 No messages found for ${sourceUsername}`);
+        webSocketService.channelParsingCompleted(channelPair.sourceName, 0);
         return;
       }
 
@@ -99,6 +104,7 @@ export class WebChannelParserService {
 
       if (newMessages.length === 0) {
         console.log(`📮 No new messages for ${sourceUsername}`);
+        webSocketService.channelParsingCompleted(channelPair.sourceName, 0);
         return;
       }
 
@@ -111,10 +117,16 @@ export class WebChannelParserService {
         // Small delay between processing messages
         await new Promise(resolve => setTimeout(resolve, 500));
       }
+      
+      // Notify WebSocket clients that channel parsing completed
+      webSocketService.channelParsingCompleted(channelPair.sourceName, newMessages.length);
 
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       console.error(`❌ Error web parsing channel ${channelPair.sourceUsername}:`, errorMessage);
+      
+      // Notify WebSocket clients about the error
+      webSocketService.parsingError(channelPair.sourceName, errorMessage);
       
       await storage.createActivityLog({
         type: 'web_parsing_error',
@@ -390,6 +402,9 @@ export class WebChannelParserService {
           });
 
           console.log(`📝 Created draft post: ${draftPost.id} ${channelPair.autoTranslate ? '(with translation)' : ''}`);
+          
+          // Notify WebSocket clients about new draft
+          webSocketService.draftCreated(channelPair.sourceName, content.substring(0, 100));
 
           // Log draft creation
           await storage.createActivityLog({
