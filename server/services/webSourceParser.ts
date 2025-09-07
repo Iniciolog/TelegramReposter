@@ -80,6 +80,15 @@ export class WebSourceParserService {
       
       console.log(`📋 Found ${items.length} items from ${webSource.name}`);
       
+      if (items.length === 0) {
+        console.warn(`⚠️ No items found for ${webSource.name}. Type: ${webSource.type}, URL: ${webSource.url}`);
+        if (webSource.type === 'html' && !webSource.selector) {
+          console.warn(`   Missing CSS selector for HTML source`);
+        }
+      } else {
+        console.log(`   Sample titles: ${items.slice(0, 3).map(i => i.title).join(', ')}`);
+      }
+      
       // Process new items
       for (const item of items) {
         await this.processWebItem(item, webSource);
@@ -123,14 +132,15 @@ export class WebSourceParserService {
         const pubDate = $item.find('pubDate').text().trim();
         const guid = $item.find('guid').text().trim() || link || `${webSource.id}-${index}`;
         
-        if (title && description) {
+        // Более либеральные требования - хватит title ИЛИ description
+        if (title || description) {
           // Extract images from content
-          const images = this.extractImages(description);
+          const images = this.extractImages(description || title);
           
           items.push({
             id: guid,
-            title,
-            content: this.cleanContent(description),
+            title: title || 'Untitled',
+            content: this.cleanContent(description || title),
             url: link,
             publishedDate: pubDate ? new Date(pubDate) : new Date(),
             images,
@@ -151,13 +161,14 @@ export class WebSourceParserService {
                            $entry.find('updated').text().trim();
           const id = $entry.find('id').text().trim() || link || `${webSource.id}-${index}`;
           
-          if (title && content) {
-            const images = this.extractImages(content);
+          // Более либеральные требования - хватит title ИЛИ content
+          if (title || content) {
+            const images = this.extractImages(content || title);
             
             items.push({
               id,
-              title,
-              content: this.cleanContent(content),
+              title: title || 'Untitled',
+              content: this.cleanContent(content || title),
               url: link,
               publishedDate: published ? new Date(published) : new Date(),
               images,
@@ -187,8 +198,9 @@ export class WebSourceParserService {
       const items: ParsedWebItem[] = [];
       
       if (!webSource.selector) {
-        console.warn(`HTML selector not defined for ${webSource.name}`);
-        return [];
+        console.warn(`HTML selector not defined for ${webSource.name}, using fallback selectors`);
+        // Используем общие селекторы если selector не определен
+        webSource.selector = 'article, .article, .post, .entry, .news-item, h1, h2, h3, p';
       }
       
       // Use the CSS selector to find content elements
@@ -215,7 +227,8 @@ export class WebSourceParserService {
         // Extract images
         const images = this.extractImagesFromElement($el);
         
-        if (content && content.length > 50) { // Only process substantial content
+        // Убираем строгий фильтр длины - берем любой контент
+        if (content && content.length > 10) { // Минимальная длина всего 10 символов
           items.push({
             id: `${webSource.id}-${index}-${Date.now()}`,
             title,
@@ -276,6 +289,8 @@ export class WebSourceParserService {
   }
 
   private cleanContent(content: string): string {
+    if (!content) return '';
+    
     // Remove HTML tags
     const $ = cheerio.load(content);
     let cleanText = $.text();
@@ -286,12 +301,17 @@ export class WebSourceParserService {
       .replace(/\n\s*\n/g, '\n')
       .trim();
     
-    // Limit length
-    if (cleanText.length > 2000) {
-      cleanText = cleanText.substring(0, 2000) + '...';
+    // Если контент очень короткий, возвращаем как есть
+    if (cleanText.length <= 50) {
+      return cleanText || 'Контент извлечен';
     }
     
-    return cleanText;
+    // Limit length но больше чем раньше
+    if (cleanText.length > 3000) {
+      cleanText = cleanText.substring(0, 3000) + '...';
+    }
+    
+    return cleanText || 'Контент извлечен';
   }
 
   private async processWebItem(item: ParsedWebItem, webSource: WebSource): Promise<void> {
