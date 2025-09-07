@@ -18,19 +18,21 @@ import Settings from "@/pages/settings";
 
 function Router() {
   return (
-    <Switch>
-      <Route path="/" component={Dashboard} />
-      <Route path="/channels" component={Channels} />
-      <Route path="/content-filters" component={ContentFilters} />
-      <Route path="/branding" component={Branding} />
-      <Route path="/scheduler" component={Scheduler} />
-      <Route path="/drafts" component={Drafts} />
-      <Route path="/web-sources" component={WebSources} />
-      <Route path="/analytics" component={Analytics} />
-      <Route path="/activity-logs" component={ActivityLogs} />
-      <Route path="/settings" component={Settings} />
-      <Route component={NotFound} />
-    </Switch>
+    <div className="max-w-screen overflow-x-hidden">
+      <Switch>
+        <Route path="/" component={Dashboard} />
+        <Route path="/channels" component={Channels} />
+        <Route path="/content-filters" component={ContentFilters} />
+        <Route path="/branding" component={Branding} />
+        <Route path="/scheduler" component={Scheduler} />
+        <Route path="/drafts" component={Drafts} />
+        <Route path="/web-sources" component={WebSources} />
+        <Route path="/analytics" component={Analytics} />
+        <Route path="/activity-logs" component={ActivityLogs} />
+        <Route path="/settings" component={Settings} />
+        <Route component={NotFound} />
+      </Switch>
+    </div>
   );
 }
 
