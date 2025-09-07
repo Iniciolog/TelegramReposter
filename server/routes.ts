@@ -485,6 +485,64 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Bulk delete draft posts
+  app.delete("/api/draft-posts", async (req, res) => {
+    try {
+      const { ids } = req.body;
+      
+      if (!Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({ message: "IDs array is required" });
+      }
+      
+      let deletedCount = 0;
+      const errors: string[] = [];
+      
+      // Get drafts info before deletion for logging
+      const draftsToDelete = await Promise.all(
+        ids.map(async (id: string) => {
+          try {
+            return await storage.getDraftPost(id);
+          } catch {
+            return null;
+          }
+        })
+      );
+      
+      // Delete each draft
+      for (const id of ids) {
+        try {
+          const deleted = await storage.deleteDraftPost(id);
+          if (deleted) {
+            deletedCount++;
+          }
+        } catch (error) {
+          errors.push(`Failed to delete draft ${id}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+      }
+      
+      // Log activity for successful deletions
+      for (const draft of draftsToDelete) {
+        if (draft) {
+          await storage.createActivityLog({
+            type: 'draft_post_deleted',
+            description: `Draft post "${draft.content?.substring(0, 50)}..." deleted (bulk)`,
+            channelPairId: draft.channelPairId,
+          });
+        }
+      }
+      
+      res.json({ 
+        success: true, 
+        deletedCount,
+        totalRequested: ids.length,
+        errors: errors.length > 0 ? errors : undefined
+      });
+    } catch (error) {
+      console.error('Error bulk deleting draft posts:', error);
+      res.status(500).json({ message: "Failed to bulk delete draft posts" });
+    }
+  });
+
   app.post("/api/draft-posts/:id/publish", async (req, res) => {
     try {
       const { id } = req.params;

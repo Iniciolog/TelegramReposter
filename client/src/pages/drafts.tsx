@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -14,7 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { formatDistanceToNow } from "date-fns";
 import { ru } from "date-fns/locale";
-import { Edit, Trash2, Send, Eye, Filter, FileText } from "lucide-react";
+import { Edit, Trash2, Send, Eye, Filter, FileText, Check, CheckSquare, Square } from "lucide-react";
 import type { DraftPost, ChannelPair } from "@shared/schema";
 import { useParsingStatus } from "@/hooks/useParsingStatus";
 
@@ -24,6 +25,7 @@ export default function DraftsPage() {
   const [selectedChannelPair, setSelectedChannelPair] = useState<string>("all");
   const [editingDraft, setEditingDraft] = useState<DraftPost | null>(null);
   const [editedContent, setEditedContent] = useState("");
+  const [selectedDrafts, setSelectedDrafts] = useState<Set<string>>(new Set());
   
   // Listen for parsing status updates
   const { statuses } = useParsingStatus();
@@ -99,6 +101,29 @@ export default function DraftsPage() {
     },
   });
 
+  // Bulk delete drafts mutation
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async (ids: string[]) => {
+      const response = await apiRequest("DELETE", "/api/draft-posts", { ids });
+      return response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/draft-posts"] });
+      setSelectedDrafts(new Set());
+      toast({
+        title: "Черновики удалены",
+        description: `Удалено ${data.deletedCount} из ${data.totalRequested} черновиков`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        variant: "destructive",
+        title: "Ошибка удаления",
+        description: error.message || "Не удалось удалить черновики",
+      });
+    },
+  });
+
   // Publish draft mutation
   const publishDraftMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -140,6 +165,32 @@ export default function DraftsPage() {
     const pair = channelPairs.find(p => p.id === channelPairId);
     return pair ? `${pair.sourceName} → ${pair.targetName}` : "Неизвестный канал";
   };
+
+  const handleSelectDraft = (draftId: string, checked: boolean) => {
+    const newSelected = new Set(selectedDrafts);
+    if (checked) {
+      newSelected.add(draftId);
+    } else {
+      newSelected.delete(draftId);
+    }
+    setSelectedDrafts(newSelected);
+  };
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedDrafts(new Set(drafts.map(d => d.id)));
+    } else {
+      setSelectedDrafts(new Set());
+    }
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedDrafts.size === 0) return;
+    bulkDeleteMutation.mutate(Array.from(selectedDrafts));
+  };
+
+  const isAllSelected = drafts.length > 0 && selectedDrafts.size === drafts.length;
+  const isPartialSelected = selectedDrafts.size > 0 && selectedDrafts.size < drafts.length;
 
   if (isLoading) {
     return (
@@ -193,6 +244,75 @@ export default function DraftsPage() {
         </div>
       </div>
 
+      {drafts.length > 0 && (
+        <div className="flex items-center justify-between gap-4 p-4 bg-muted/50 rounded-lg">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <Checkbox
+                checked={isAllSelected}
+                ref={(ref) => {
+                  if (ref) {
+                    ref.indeterminate = isPartialSelected;
+                  }
+                }}
+                onCheckedChange={handleSelectAll}
+                data-testid="checkbox-select-all"
+              />
+              <span className="text-sm font-medium">
+                {selectedDrafts.size === 0 
+                  ? "Выбрать все" 
+                  : `Выбрано: ${selectedDrafts.size} из ${drafts.length}`
+                }
+              </span>
+            </div>
+          </div>
+          
+          {selectedDrafts.size > 0 && (
+            <div className="flex items-center gap-2">
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button 
+                    variant="destructive" 
+                    size="sm"
+                    disabled={bulkDeleteMutation.isPending}
+                    data-testid="button-bulk-delete"
+                  >
+                    <Trash2 className="h-4 w-4 mr-1" />
+                    Удалить выбранные ({selectedDrafts.size})
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Удалить выбранные черновики?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Это действие нельзя отменить. Будет удалено {selectedDrafts.size} черновиков.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Отмена</AlertDialogCancel>
+                    <AlertDialogAction 
+                      onClick={handleBulkDelete}
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    >
+                      Удалить
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+              
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => setSelectedDrafts(new Set())}
+                data-testid="button-clear-selection"
+              >
+                Очистить выбор
+              </Button>
+            </div>
+          )}
+        </div>
+      )}
+
       {drafts.length === 0 ? (
         <Card>
           <CardContent className="text-center py-12">
@@ -212,19 +332,26 @@ export default function DraftsPage() {
             <Card key={draft.id} className="hover:shadow-md transition-shadow">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
-                  <div className="space-y-1">
-                    <CardTitle className="text-lg">
-                      {getChannelPairName(draft.channelPairId || '')}
-                    </CardTitle>
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <span>ID поста: {draft.originalPostId}</span>
-                      <Separator orientation="vertical" className="h-4" />
-                      <span>
-                        {draft.createdAt ? formatDistanceToNow(new Date(draft.createdAt), { 
-                          addSuffix: true, 
-                          locale: ru 
-                        }) : 'Неизвестно'}
-                      </span>
+                  <div className="flex items-center gap-3">
+                    <Checkbox
+                      checked={selectedDrafts.has(draft.id)}
+                      onCheckedChange={(checked) => handleSelectDraft(draft.id, !!checked)}
+                      data-testid={`checkbox-draft-${draft.id}`}
+                    />
+                    <div className="space-y-1">
+                      <CardTitle className="text-lg">
+                        {getChannelPairName(draft.channelPairId || '')}
+                      </CardTitle>
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <span>ID поста: {draft.originalPostId}</span>
+                        <Separator orientation="vertical" className="h-4" />
+                        <span>
+                          {draft.createdAt ? formatDistanceToNow(new Date(draft.createdAt), { 
+                            addSuffix: true, 
+                            locale: ru 
+                          }) : 'Неизвестно'}
+                        </span>
+                      </div>
                     </div>
                   </div>
                   <Badge variant={draft.status === "draft" ? "secondary" : "default"}>
