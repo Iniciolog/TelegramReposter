@@ -1,4 +1,6 @@
 import express, { type Request, Response, NextFunction } from "express";
+import WebSocket from "ws";
+import { createServer } from "http";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 
@@ -37,7 +39,30 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  const httpServer = createServer(app);
   const server = await registerRoutes(app);
+  
+  // Create WebSocket server
+  const wss = new WebSocket.Server({ server: httpServer });
+  
+  // Store WebSocket server in app locals for access from other modules
+  app.locals.wss = wss;
+  
+  // Initialize WebSocket service
+  const { webSocketService } = await import("./services/websocketService");
+  webSocketService.initialize(wss);
+  
+  wss.on('connection', (ws) => {
+    log('📱 WebSocket client connected');
+    
+    ws.on('close', () => {
+      log('📱 WebSocket client disconnected');
+    });
+    
+    ws.on('error', (error) => {
+      log('📱 WebSocket error:', String(error));
+    });
+  });
   
   // Lazy initialization flags
   let servicesInitialized = false;
@@ -144,7 +169,7 @@ app.use((req, res, next) => {
   // this serves both the API and the client.
   // It is the only port that is not firewalled.
   const port = parseInt(process.env.PORT || '5000', 10);
-  server.listen({
+  httpServer.listen({
     port,
     host: "0.0.0.0",
     reusePort: true,
