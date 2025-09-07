@@ -323,7 +323,7 @@ export class WebSourceParserService {
 
   private isValidArticleContent(content: string, title: string): boolean {
     // Must have substantial content
-    if (!content || content.length < 200) return false;
+    if (!content || content.length < 50) return false;
     
     // Filter out navigation and menu content
     const navigationKeywords = [
@@ -331,7 +331,9 @@ export class WebSourceParserService {
       'силовые структуры', 'бывший ссср', 'интернет', 'меню', 'навигация',
       'войти', 'регистрация', 'подписка', 'реклама', 'footer', 'header',
       'copyright', 'все права защищены', 'function', 'javascript', 'var ', 'const ',
-      'let ', 'document.querySelector', 'window.'
+      'let ', 'document.querySelector', 'window.',
+      'основные сведения', 'структура и органы управления', 'документы', 'образование',
+      'руководство', 'педагогический состав', 'материально-техническое обеспечение'
     ];
     
     const lowerContent = content.toLowerCase();
@@ -365,14 +367,34 @@ export class WebSourceParserService {
   }
 
   private cleanContent(content: string): string {
-    // Remove HTML tags
+    // Load content and remove script/style elements completely
     const $ = cheerio.load(content);
+    
+    // Remove scripts, styles, and other unwanted elements
+    $('script, style, noscript, iframe, embed, object').remove();
+    
+    // Get clean text
     let cleanText = $.text();
     
-    // Clean up whitespace and formatting
+    // Remove JavaScript-like patterns
     cleanText = cleanText
-      .replace(/\s+/g, ' ')
-      .replace(/\n\s*\n/g, '\n')
+      .replace(/function\s+\w+\s*\([^)]*\)\s*\{[^}]*\}/g, '') // Remove function definitions
+      .replace(/var\s+\w+\s*=.*?;/g, '') // Remove var declarations
+      .replace(/let\s+\w+\s*=.*?;/g, '') // Remove let declarations
+      .replace(/const\s+\w+\s*=.*?;/g, '') // Remove const declarations
+      .replace(/document\.\w+.*?;/g, '') // Remove document calls
+      .replace(/window\.\w+.*?;/g, '') // Remove window calls
+      .replace(/console\.\w+.*?;/g, '') // Remove console calls
+      .replace(/\{\s*[\w\s:,]*\}/g, '') // Remove object literals
+      .replace(/\[.*?\]/g, '') // Remove array literals
+      .replace(/if\s*\([^)]*\)\s*\{[^}]*\}/g, '') // Remove if statements
+      .replace(/for\s*\([^)]*\)\s*\{[^}]*\}/g, '') // Remove for loops
+      .replace(/while\s*\([^)]*\)\s*\{[^}]*\}/g, '') // Remove while loops
+      .replace(/return\s+.*?;/g, '') // Remove return statements
+      .replace(/\w+\.\w+\([^)]*\)/g, '') // Remove method calls
+      .replace(/[\{\};]/g, ' ') // Remove remaining braces and semicolons
+      .replace(/\s+/g, ' ') // Normalize whitespace
+      .replace(/\n\s*\n/g, '\n') // Remove extra newlines
       .trim();
     
     // Limit length
