@@ -1,5 +1,5 @@
 import express, { type Request, Response, NextFunction } from "express";
-import WebSocket from "ws";
+import { WebSocketServer } from "ws";
 import { createServer } from "http";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
@@ -43,7 +43,7 @@ app.use((req, res, next) => {
   const server = await registerRoutes(app);
   
   // Create WebSocket server
-  const wss = new WebSocket.Server({ server: httpServer });
+  const wss = new WebSocketServer({ server: httpServer });
   
   // Store WebSocket server in app locals for access from other modules
   app.locals.wss = wss;
