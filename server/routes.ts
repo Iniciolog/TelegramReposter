@@ -629,33 +629,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/web-sources/:id/parse", async (req, res) => {
     try {
-      const webSourceId = req.params.id;
-      const webSource = await storage.getWebSource(webSourceId);
+      await webSourceParserService.parseSourceManually(req.params.id);
       
-      if (!webSource) {
-        return res.status(404).json({ message: "Web source not found" });
-      }
-
-      console.log(`🔍 Starting manual parsing for: ${webSource.name}`);
+      const webSource = await storage.getWebSource(req.params.id);
       
-      // Use simple parser (no AI analysis)
-      await webSourceParserService.parseSourceManually(webSourceId);
-      
-      // Count how many drafts were created from this source
-      const drafts = await storage.getDraftPosts();
-      const sourceDrafts = drafts.filter(d => d.webSourceId === webSourceId);
-      
-      res.json({ 
-        message: `Парсинг завершен! Найдено материалов: ${sourceDrafts.length}. Все подходящие материалы автоматически сохранены как черновики.`, 
-        success: true,
-        draftsCount: sourceDrafts.length,
-        sourceName: webSource.name
+      // Log activity
+      await storage.createActivityLog({
+        type: 'web_source_parsed',
+        description: `Manual parsing triggered for: ${webSource?.name}`,
       });
-
+      
+      res.json({ message: "Web source parsing triggered successfully" });
     } catch (error) {
       console.error('Manual web source parsing error:', error);
       res.status(500).json({ 
-        message: "Failed to start web source parsing",
+        message: "Failed to parse web source",
         error: error instanceof Error ? error.message : String(error)
       });
     }

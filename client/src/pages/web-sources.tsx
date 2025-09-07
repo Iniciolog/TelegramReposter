@@ -18,8 +18,6 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertWebSourceSchema, type WebSource, type InsertWebSource } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
-import { Loader2, CheckCircle, XCircle, AlertCircle } from "lucide-react";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { format } from "date-fns";
 
 interface CreateWebSourceFormData extends InsertWebSource {}
@@ -30,8 +28,6 @@ export default function WebSources() {
   const queryClient = useQueryClient();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [editingWebSource, setEditingWebSource] = useState<WebSource | null>(null);
-  const [parsingResults, setParsingResults] = useState<{ [key: string]: any }>({});
-  const [parsingStatus, setParsingStatus] = useState<{ [key: string]: string }>({});
 
   // Fetch web sources
   const { data: webSources, isLoading } = useQuery<WebSource[]>({
@@ -102,42 +98,20 @@ export default function WebSources() {
 
   // Parse web source mutation
   const parseWebSourceMutation = useMutation({
-    mutationFn: async (id: string) => {
-      setParsingStatus(prev => ({ ...prev, [id]: 'Парсинг в процессе...' }));
-      const response = await apiRequest('POST', `/api/web-sources/${id}/parse`);
-      const result = await response.json();
-      setParsingStatus(prev => ({ ...prev, [id]: 'Парсинг завершен' }));
-      return result;
-    },
-    onSuccess: (result, id) => {
-      setParsingResults(prev => ({ ...prev, [id]: result }));
-      
-      // Update query to refresh drafts list
-      queryClient.invalidateQueries({ queryKey: ['/api/draft-posts'] });
-      
+    mutationFn: (id: string) =>
+      apiRequest('POST', `/api/web-sources/${id}/parse`),
+    onSuccess: () => {
       toast({
-        title: result.success ? "Парсинг завершен!" : "Внимание",
-        description: result.message,
-        variant: result.success ? "default" : "destructive",
+        title: "Success",
+        description: "Web source parsing triggered successfully",
       });
-      
-      // Clear status after 3 seconds
-      setTimeout(() => {
-        setParsingStatus(prev => { const updated = { ...prev }; delete updated[id]; return updated; });
-      }, 3000);
     },
-    onError: (error: any, id) => {
-      setParsingStatus(prev => ({ ...prev, [id]: 'Ошибка парсинга' }));
+    onError: (error: any) => {
       toast({
-        title: "Ошибка",
-        description: error.message || "Не удалось запустить парсинг",
+        title: "Error",
+        description: error.message || "Failed to parse web source",
         variant: "destructive",
       });
-      
-      // Clear status after 3 seconds
-      setTimeout(() => {
-        setParsingStatus(prev => { const updated = { ...prev }; delete updated[id]; return updated; });
-      }, 3000);
     },
   });
 
@@ -416,11 +390,7 @@ export default function WebSources() {
                           disabled={parseWebSourceMutation.isPending}
                           data-testid={`button-parse-web-source-${webSource.id}`}
                         >
-                          {parseWebSourceMutation.isPending && parseWebSourceMutation.variables === webSource.id ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Play className="h-4 w-4" />
-                          )}
+                          <Play className="h-4 w-4" />
                         </Button>
                         
                         <Button
@@ -492,37 +462,6 @@ export default function WebSources() {
                       <div className="text-sm text-muted-foreground">
                         <span className="font-medium">Last parsed:</span>{' '}
                         {format(new Date(webSource.lastParsed), 'MMM d, HH:mm')}
-                      </div>
-                    )}
-                    
-                    {/* Parsing Status */}
-                    {parsingStatus[webSource.id] && (
-                      <div className="text-sm text-blue-600 dark:text-blue-400 flex items-center gap-2">
-                        {parsingStatus[webSource.id].includes('процессе') ? (
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                        ) : parsingStatus[webSource.id].includes('завершен') ? (
-                          <CheckCircle className="h-3 w-3 text-green-500" />
-                        ) : (
-                          <XCircle className="h-3 w-3 text-red-500" />
-                        )}
-                        <span>{parsingStatus[webSource.id]}</span>
-                      </div>
-                    )}
-                    
-                    {/* Parsing Results */}
-                    {parsingResults[webSource.id] && (
-                      <div className="text-sm">
-                        {parsingResults[webSource.id].success ? (
-                          <div className="text-green-600 dark:text-green-400 flex items-center gap-2">
-                            <CheckCircle className="h-3 w-3" />
-                            <span>Найдено черновиков: {parsingResults[webSource.id].draftsCount || 0}</span>
-                          </div>
-                        ) : (
-                          <div className="text-red-600 dark:text-red-400 flex items-center gap-2">
-                            <XCircle className="h-3 w-3" />
-                            <span>Материалы не найдены</span>
-                          </div>
-                        )}
                       </div>
                     )}
                   </CardContent>
@@ -677,7 +616,6 @@ export default function WebSources() {
           </Dialog>
         </main>
       </div>
-      
     </div>
   );
 }
