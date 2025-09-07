@@ -9,7 +9,6 @@ import { webSourceParserService } from "./services/webSourceParser";
 import { translationService } from "./services/translationService";
 import { insertChannelPairSchema, insertSettingsSchema, insertScheduledPostSchema, insertDraftPostSchema, insertWebSourceSchema } from "@shared/schema";
 import { z } from "zod";
-import { aiContentAnalyzer } from "./services/aiContentAnalyzer";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Health check endpoint for deployment verification
@@ -637,72 +636,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Web source not found" });
       }
 
-      // Start AI-enhanced parsing
-      try {
-        // First, get content using existing parser
-        await webSourceParserService.parseSourceManually(webSourceId);
-        
-        // Then fetch the raw HTML content for AI analysis
-        const axios = await import('axios');
-        const response = await axios.default.get(webSource.url, {
-          timeout: 30000,
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (compatible; ContentParser/1.0)'
-          }
-        });
-
-        // AI analysis
-        const analyzedContent = await aiContentAnalyzer.analyzeAndCleanContent(
-          webSource.url,
-          response.data
-        );
-
-        // Save as draft if content is valuable (очень либеральный порог)
-        if (analyzedContent.isValuable && analyzedContent.valueScore > 35) {
-          const draft = await storage.createDraftPost({
-            originalPostId: `web_${webSourceId}_${Date.now()}`,
-            content: `${analyzedContent.title}\n\n${analyzedContent.telegramContent}`,
-            originalContent: analyzedContent.content,
-            mediaUrls: analyzedContent.images,
-            sourceUrl: analyzedContent.sourceUrl,
-            webSourceId: webSourceId,
-            status: 'draft'
-          });
-
-          // Log activity
-          await storage.createActivityLog({
-            type: 'web_source_parsed',
-            description: `AI parsing completed for: ${webSource.name}. Draft created: ${analyzedContent.title}`,
-          });
-
-          res.json({ 
-            message: "ИИ-анализ завершен! Контент сохранен как черновик.", 
-            success: true,
-            draft,
-            analyzedContent
-          });
-
-        } else {
-          // Log activity
-          await storage.createActivityLog({
-            type: 'web_source_parsed',
-            description: `AI parsing completed for: ${webSource.name}. Content not valuable (score: ${analyzedContent.valueScore})`,
-          });
-
-          res.json({ 
-            message: `Контент не достаточно ценный для публикации (оценка: ${analyzedContent.valueScore}/100)`, 
-            success: false,
-            analyzedContent
-          });
-        }
-
-      } catch (error) {
-        console.error('AI parsing error:', error);
-        res.status(500).json({ 
-          message: "Ошибка ИИ-анализа: " + (error instanceof Error ? error.message : String(error)),
-          success: false
-        });
-      }
+      console.log(`🔍 Starting manual parsing for: ${webSource.name}`);
+      
+      // Use simple parser (no AI analysis)
+      await webSourceParserService.parseSourceManually(webSourceId);
+      
+      // Count how many drafts were created from this source
+      const drafts = await storage.getDraftPosts();
+      const sourceDrafts = drafts.filter(d => d.webSourceId === webSourceId);
+      
+      res.json({ 
+        message: `Парсинг завершен! Найдено материалов: ${sourceDrafts.length}. Все подходящие материалы автоматически сохранены как черновики.`, 
+        success: true,
+        draftsCount: sourceDrafts.length,
+        sourceName: webSource.name
+      });
 
     } catch (error) {
       console.error('Manual web source parsing error:', error);
