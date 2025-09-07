@@ -248,7 +248,8 @@ export class WebSourceParserService {
         // Extract images
         const images = this.extractImagesFromElement($el);
         
-          if (content && content.length > 50) { // Only process substantial content
+          // Improved content filtering
+          if (content && this.isValidArticleContent(content, title)) {
             console.log(`   ✅ Found content: "${title.substring(0, 50)}..."`);
             items.push({
               id: `${webSource.id}-${index}-${Date.now()}`,
@@ -318,6 +319,49 @@ export class WebSourceParserService {
     } catch {
       return false;
     }
+  }
+
+  private isValidArticleContent(content: string, title: string): boolean {
+    // Must have substantial content
+    if (!content || content.length < 200) return false;
+    
+    // Filter out navigation and menu content
+    const navigationKeywords = [
+      'главное', 'россия', 'мир', 'экономика', 'спорт', 'культура', 'наука и техника',
+      'силовые структуры', 'бывший ссср', 'интернет', 'меню', 'навигация',
+      'войти', 'регистрация', 'подписка', 'реклама', 'footer', 'header',
+      'copyright', 'все права защищены', 'function', 'javascript', 'var ', 'const ',
+      'let ', 'document.querySelector', 'window.'
+    ];
+    
+    const lowerContent = content.toLowerCase();
+    const lowerTitle = title.toLowerCase();
+    
+    // Check if content contains too many navigation keywords
+    const navigationCount = navigationKeywords.filter(keyword => 
+      lowerContent.includes(keyword) || lowerTitle.includes(keyword)
+    ).length;
+    
+    // If more than 2 navigation keywords, likely a menu/navigation
+    if (navigationCount > 2) return false;
+    
+    // Check if content looks like a JavaScript/technical content
+    if (lowerContent.includes('function') || 
+        lowerContent.includes('document.') || 
+        lowerContent.includes('var ') || 
+        lowerContent.includes('const ') ||
+        lowerContent.includes('let ') ||
+        lowerContent.includes('querySelector')) return false;
+    
+    // Content should have reasonable text-to-whitespace ratio
+    const textRatio = content.replace(/\s/g, '').length / content.length;
+    if (textRatio < 0.3) return false; // Too much whitespace
+    
+    // Title should not be too generic
+    const genericTitles = ['главная', 'меню', 'навигация', 'footer', 'header'];
+    if (genericTitles.some(generic => lowerTitle.includes(generic))) return false;
+    
+    return true;
   }
 
   private cleanContent(content: string): string {
