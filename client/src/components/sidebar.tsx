@@ -120,7 +120,7 @@ export function Sidebar({ className }: SidebarProps = {}) {
   }, [isMobileMenuOpen]);
 
   const handleDownload = async () => {
-    if (!password) {
+    if (!password.trim()) {
       toast({
         title: "Ошибка",
         description: "Введите пароль",
@@ -136,12 +136,12 @@ export function Sidebar({ className }: SidebarProps = {}) {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ password }),
+        body: JSON.stringify({ password: password.trim() }),
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || "Ошибка скачивания");
+        throw new Error(errorData.error || "Неверный пароль или ошибка сервера");
       }
 
       // Create download
@@ -160,9 +160,11 @@ export function Sidebar({ className }: SidebarProps = {}) {
         description: "Архив скачан успешно",
       });
 
+      // Закрываем диалог и очищаем пароль только при успешном скачивании
       setIsDownloadDialogOpen(false);
       setPassword("");
     } catch (error) {
+      // При ошибке НЕ очищаем пароль, чтобы пользователь мог исправить его
       toast({
         title: "Ошибка",
         description: error instanceof Error ? error.message : "Неизвестная ошибка",
