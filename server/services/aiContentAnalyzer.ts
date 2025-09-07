@@ -164,22 +164,32 @@ export class AIContentAnalyzer {
   private async performAIAnalysis(htmlContent: string, url: string) {
     try {
       const prompt = `
-Проанализируй HTML контент веб-страницы и определи:
+Проанализируй HTML контент веб-страницы. Если это НЕ реклама, навигация или техническая информация, то считай контент ценным.
 
-1. Является ли это ценным контентом (статья, новость, пост)
-2. Извлеки основную информацию
-3. Очисти контент от лишних элементов
-4. Определи ценные изображения
+ЦЕННЫЙ КОНТЕНТ (80+ баллов):
+- Статьи, новости, блог-посты
+- Образовательный контент
+- Инструкции и руководства
+- Обзоры и аналитика
+- Любая полезная информация для читателей
+
+НЕ ЦЕННЫЙ КОНТЕНТ (менее 40 баллов):
+- Только навигация или меню
+- Только реклама
+- Ошибки 404
+- Технические страницы без контента
 
 HTML контент:
 ${htmlContent.substring(0, 8000)}
 
 URL: ${url}
 
+ОТВЕЧАЙ ЛИБЕРАЛЬНО! Если есть текстовый контент больше 100 символов - это уже ценно.
+
 Отвечай в формате JSON:
 {
   "isValuable": boolean,
-  "valueScore": number (0-100),
+  "valueScore": number (0-100, будь щедрым!),
   "title": "заголовок статьи",
   "description": "краткое описание",
   "cleanContent": "очищенный текст статьи",
@@ -194,7 +204,7 @@ URL: ${url}
         messages: [
           {
             role: "system",
-            content: "Ты эксперт по анализу веб-контента. Определяй ценность контента для публикации в Telegram каналах. Фокусируйся на статьях, новостях, полезных постах. Игнорируй рекламу, навигацию, техническую информацию."
+            content: "Ты либеральный эксперт по анализу веб-контента. БОЛЬШИНСТВО контента с текстом ценно для Telegram! Давай высокие оценки (70-90 баллов) любому контенту со статьями, новостями, постами. Низкие оценки только для чистой рекламы или технических страниц."
           },
           {
             role: "user",
@@ -225,9 +235,20 @@ URL: ${url}
       const title = $('h1').first().text() || $('title').text() || 'Без заголовка';
       const content = $('p').map((i, el) => $(el).text()).get().join('\n\n');
       
+      // Более щедрый fallback анализ
+      const wordCount = content.split(/\s+/).filter(word => word.length > 2).length;
+      const hasStructure = content.includes('\n') || title.length > 10;
+      
+      let score = 40; // базовая оценка
+      if (wordCount > 50) score += 20;
+      if (wordCount > 100) score += 15;
+      if (wordCount > 200) score += 10;
+      if (hasStructure) score += 10;
+      if (title.length > 20) score += 5;
+      
       return {
-        isValuable: content.length > 300,
-        valueScore: Math.min(content.length / 10, 100),
+        isValuable: content.length > 100, // понижен минимум
+        valueScore: Math.min(score, 95), // максимум 95 баллов
         title,
         description: content.substring(0, 200),
         cleanContent: content,

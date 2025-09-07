@@ -657,8 +657,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           response.data
         );
 
-        // Save as draft if content is valuable
-        if (analyzedContent.isValuable && analyzedContent.valueScore > 30) {
+        // Save as draft if content is valuable (очень либеральный порог)
+        if (analyzedContent.isValuable && analyzedContent.valueScore > 35) {
           const draft = await storage.createDraftPost({
             originalPostId: `web_${webSourceId}_${Date.now()}`,
             content: `${analyzedContent.title}\n\n${analyzedContent.telegramContent}`,
