@@ -18,6 +18,8 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertWebSourceSchema, type WebSource, type InsertWebSource } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
+import { useWebSocket } from "@/hooks/useWebSocket";
+import { ParsingProgressDialog } from "@/components/ParsingProgressDialog";
 import { format } from "date-fns";
 
 interface CreateWebSourceFormData extends InsertWebSource {}
@@ -28,6 +30,8 @@ export default function WebSources() {
   const queryClient = useQueryClient();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [editingWebSource, setEditingWebSource] = useState<WebSource | null>(null);
+  const [parsingSourceId, setParsingSourceId] = useState<string | null>(null);
+  const { isConnected, parsingProgress, parsingResults, subscribe, unsubscribe, clearResult } = useWebSocket();
 
   // Fetch web sources
   const { data: webSources, isLoading } = useQuery<WebSource[]>({
@@ -100,16 +104,20 @@ export default function WebSources() {
   const parseWebSourceMutation = useMutation({
     mutationFn: (id: string) =>
       apiRequest('POST', `/api/web-sources/${id}/parse`),
-    onSuccess: () => {
+    onSuccess: (response, id) => {
+      // Subscribe to parsing progress for this web source
+      subscribe(`parsing:${id}`);
+      setParsingSourceId(id);
+      
       toast({
-        title: "Success",
-        description: "Web source parsing triggered successfully",
+        title: "Парсинг начат",
+        description: "ИИ-анализ контента запущен",
       });
     },
     onError: (error: any) => {
       toast({
-        title: "Error",
-        description: error.message || "Failed to parse web source",
+        title: "Ошибка",
+        description: error.message || "Не удалось запустить парсинг",
         variant: "destructive",
       });
     },
@@ -616,6 +624,30 @@ export default function WebSources() {
           </Dialog>
         </main>
       </div>
+      
+      {/* Progress Dialog */}
+      <ParsingProgressDialog
+        open={!!parsingSourceId}
+        onClose={() => {
+          if (parsingSourceId) {
+            unsubscribe(`parsing:${parsingSourceId}`);
+            clearResult(parsingSourceId);
+            setParsingSourceId(null);
+          }
+        }}
+        webSourceId={parsingSourceId || ''}
+        webSourceName={webSources?.find(ws => ws.id === parsingSourceId)?.name || ''}
+        progress={parsingSourceId ? parsingProgress[parsingSourceId] : undefined}
+        result={parsingSourceId ? parsingResults[parsingSourceId] : undefined}
+        onViewDraft={(draft) => {
+          // Navigate to drafts page or show draft details
+          toast({
+            title: "Черновик готов",
+            description: `Черновик "${draft.content?.split('\n')[0]?.substring(0, 50)}..." создан`,
+          });
+          // You can add navigation to drafts page here if needed
+        }}
+      />
     </div>
   );
 }

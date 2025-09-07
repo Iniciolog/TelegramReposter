@@ -673,17 +673,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Save as draft if content is valuable
           if (analyzedContent.isValuable && analyzedContent.valueScore > 30) {
             const draft = await storage.createDraftPost({
-              title: analyzedContent.title,
-              content: analyzedContent.telegramContent,
-              images: analyzedContent.images,
-              source: 'web',
-              metadata: {
-                sourceUrl: analyzedContent.sourceUrl,
-                tags: analyzedContent.tags,
-                valueScore: analyzedContent.valueScore,
-                originalContent: analyzedContent.content,
-                webSourceId: webSourceId
-              }
+              originalPostId: `web_${webSourceId}_${Date.now()}`,
+              content: `${analyzedContent.title}\n\n${analyzedContent.telegramContent}`,
+              originalContent: analyzedContent.content,
+              mediaUrls: analyzedContent.images,
+              sourceUrl: analyzedContent.sourceUrl,
+              webSourceId: webSourceId,
+              status: 'draft'
             });
 
             wsManager.sendParsingResult(webSourceId, {
