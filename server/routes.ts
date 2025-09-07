@@ -9,6 +9,8 @@ import { webSourceParserService } from "./services/webSourceParser";
 import { translationService } from "./services/translationService";
 import { insertChannelPairSchema, insertSettingsSchema, insertScheduledPostSchema, insertDraftPostSchema, insertWebSourceSchema } from "@shared/schema";
 import { z } from "zod";
+import { wsManager } from "./websocket";
+import { aiContentAnalyzer } from "./services/aiContentAnalyzer";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Health check endpoint for deployment verification
@@ -629,21 +631,106 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/web-sources/:id/parse", async (req, res) => {
     try {
-      await webSourceParserService.parseSourceManually(req.params.id);
+      const webSourceId = req.params.id;
+      const webSource = await storage.getWebSource(webSourceId);
       
-      const webSource = await storage.getWebSource(req.params.id);
-      
-      // Log activity
-      await storage.createActivityLog({
-        type: 'web_source_parsed',
-        description: `Manual parsing triggered for: ${webSource?.name}`,
-      });
-      
-      res.json({ message: "Web source parsing triggered successfully" });
+      if (!webSource) {
+        return res.status(404).json({ message: "Web source not found" });
+      }
+
+      res.json({ message: "AI parsing started", webSourceId });
+
+      // Start AI-enhanced parsing with progress updates
+      (async () => {
+        try {
+          wsManager.sendParsingProgress(webSourceId, {
+            status: 'analyzing',
+            message: 'Начинаю парсинг с ИИ-анализом...',
+            progress: 0
+          });
+
+          // First, get content using existing parser
+          await webSourceParserService.parseSourceManually(webSourceId);
+          
+          // Then fetch the raw HTML content
+          const axios = await import('axios');
+          const response = await axios.default.get(webSource.url, {
+            timeout: 30000,
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (compatible; ContentParser/1.0)'
+            }
+          });
+
+          // AI analysis with progress tracking
+          const analyzedContent = await aiContentAnalyzer.analyzeAndCleanContent(
+            webSource.url,
+            response.data,
+            (progress) => {
+              wsManager.sendParsingProgress(webSourceId, progress);
+            }
+          );
+
+          // Save as draft if content is valuable
+          if (analyzedContent.isValuable && analyzedContent.valueScore > 30) {
+            const draft = await storage.createDraftPost({
+              title: analyzedContent.title,
+              content: analyzedContent.telegramContent,
+              images: analyzedContent.images,
+              source: 'web',
+              metadata: {
+                sourceUrl: analyzedContent.sourceUrl,
+                tags: analyzedContent.tags,
+                valueScore: analyzedContent.valueScore,
+                originalContent: analyzedContent.content,
+                webSourceId: webSourceId
+              }
+            });
+
+            wsManager.sendParsingResult(webSourceId, {
+              success: true,
+              draft,
+              analyzedContent,
+              message: 'Контент проанализирован и сохранен как черновик!'
+            });
+
+            // Log activity
+            await storage.createActivityLog({
+              type: 'web_source_parsed',
+              description: `AI parsing completed for: ${webSource.name}. Draft created: ${analyzedContent.title}`,
+            });
+          } else {
+            wsManager.sendParsingResult(webSourceId, {
+              success: false,
+              analyzedContent,
+              message: 'Контент не достаточно ценный для публикации'
+            });
+
+            // Log activity
+            await storage.createActivityLog({
+              type: 'web_source_parsed',
+              description: `AI parsing completed for: ${webSource.name}. Content not valuable (score: ${analyzedContent.valueScore})`,
+            });
+          }
+
+        } catch (error) {
+          console.error('AI parsing error:', error);
+          wsManager.sendParsingProgress(webSourceId, {
+            status: 'error',
+            message: 'Ошибка при анализе контента',
+            progress: 0
+          });
+
+          wsManager.sendParsingResult(webSourceId, {
+            success: false,
+            message: 'Ошибка парсинга: ' + (error instanceof Error ? error.message : String(error))
+          });
+        }
+      })();
+
     } catch (error) {
       console.error('Manual web source parsing error:', error);
       res.status(500).json({ 
-        message: "Failed to parse web source",
+        message: "Failed to start web source parsing",
         error: error instanceof Error ? error.message : String(error)
       });
     }
@@ -675,5 +762,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   const httpServer = createServer(app);
+  
+  // Initialize WebSocket server
+  wsManager.initialize(httpServer);
+  
   return httpServer;
 }
