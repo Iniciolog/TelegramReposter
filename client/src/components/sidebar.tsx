@@ -237,12 +237,16 @@ export function Sidebar({ className }: SidebarProps = {}) {
               <div className="space-y-2">
                 <Label htmlFor="password">Пароль доступа</Label>
                 <Input
-                  id="password"
-                  type="password"
-                  placeholder="Введите пароль"
+                  id="download-password"
+                  type="text"
+                  placeholder="Введите пароль (1111)"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleDownload()}
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
                   data-testid="input-download-password"
                 />
               </div>
