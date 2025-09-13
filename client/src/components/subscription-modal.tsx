@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { Clock, CreditCard, Key, ExternalLink, CheckCircle, X } from 'lucide-react';
+import { FaGoogle } from 'react-icons/fa';
 import {
   Dialog,
   DialogContent,
@@ -86,6 +87,11 @@ export function SubscriptionModal({
     setActivationCode('');
   };
 
+  const handleGoogleLogin = () => {
+    // Простая ссылка на Google OAuth - здесь вы можете вставить ссылку из Google Cloud Console
+    window.open('https://accounts.google.com/o/oauth2/v2/auth?client_id=YOUR_GOOGLE_CLIENT_ID&redirect_uri=YOUR_REDIRECT_URI&response_type=code&scope=openid%20email%20profile', '_blank', 'noopener,noreferrer');
+  };
+
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !activationMutation.isPending && activationCode.trim()) {
       handleActivate();
@@ -140,6 +146,26 @@ export function SubscriptionModal({
             </DialogHeader>
 
             <div className="mt-6 space-y-4">
+              {/* Google OAuth Button */}
+              <Button
+                onClick={handleGoogleLogin}
+                className="w-full bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-white dark:border-gray-600 dark:hover:bg-gray-700"
+                size="lg"
+                data-testid="button-google-login"
+              >
+                <FaGoogle className="mr-3 h-5 w-5 text-red-500" />
+                Войти через Google
+              </Button>
+
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-background px-2 text-muted-foreground">или</span>
+                </div>
+              </div>
+
               {/* Payment Link Button */}
               <Button
                 onClick={handlePaymentLink}
