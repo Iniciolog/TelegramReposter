@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { SubscriptionModal } from "@/components/subscription-modal";
+import { Footer } from "@/components/footer";
 import { useSubscriptionTracker } from "@/hooks/useSubscriptionTracker";
 import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/dashboard";
@@ -53,15 +54,18 @@ function AppWithSubscription() {
   };
 
   return (
-    <>
-      <Router />
+    <div className="min-h-screen flex flex-col">
+      <div className="flex-1">
+        <Router />
+      </div>
+      <Footer />
       <SubscriptionModal
         isOpen={isSubscriptionRequired}
         onClose={handleCloseModal}
         onActivate={handleActivate}
         timeRemaining={getFormattedTimeRemaining()}
       />
-    </>
+    </div>
   );
 }
 
