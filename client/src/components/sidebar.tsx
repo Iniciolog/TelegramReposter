@@ -1,7 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { cn } from "@/lib/utils";
 import { 
-  FolderSync, 
   BarChart3, 
   Settings, 
   Filter, 
@@ -14,9 +13,9 @@ import {
   FileText,
   Globe,
   Menu,
-  X,
-  Download
+  X
 } from "lucide-react";
+import logoPath from "@assets/logo.png";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { LanguageSwitcher } from "./language-switcher";
 import { Button } from "@/components/ui/button";
@@ -94,9 +93,6 @@ export function Sidebar({ className }: SidebarProps = {}) {
   const [location] = useLocation();
   const { t } = useLanguage();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isDownloadDialogOpen, setIsDownloadDialogOpen] = useState(false);
-  const [password, setPassword] = useState("");
-  const [isDownloading, setIsDownloading] = useState(false);
   const { toast } = useToast();
 
   // Close mobile menu on route change
@@ -119,69 +115,18 @@ export function Sidebar({ className }: SidebarProps = {}) {
     }
   }, [isMobileMenuOpen]);
 
-  const handleDownload = async () => {
-    if (!password.trim()) {
-      toast({
-        title: "Ошибка",
-        description: "Введите пароль",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setIsDownloading(true);
-    try {
-      const response = await fetch("/api/download/deployment", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ password: password.trim() }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Неверный пароль или ошибка сервера");
-      }
-
-      // Create download
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "telegram-autoposter-deployment.zip";
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-
-      toast({
-        title: "Успех",
-        description: "Архив скачан успешно",
-      });
-
-      // Закрываем диалог и очищаем пароль только при успешном скачивании
-      setIsDownloadDialogOpen(false);
-      setPassword("");
-    } catch (error) {
-      // При ошибке НЕ очищаем пароль, чтобы пользователь мог исправить его
-      toast({
-        title: "Ошибка",
-        description: error instanceof Error ? error.message : "Неизвестная ошибка",
-        variant: "destructive",
-      });
-    } finally {
-      setIsDownloading(false);
-    }
-  };
 
   const SidebarContent = () => (
     <div className={cn("w-64 bg-card border-r border-border flex flex-col h-screen", className)}>
       {/* Logo */}
       <div className="p-6 border-b border-border">
         <div className="flex items-center space-x-3">
-          <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-            <FolderSync className="text-primary-foreground h-4 w-4" />
+          <div className="w-8 h-8 flex items-center justify-center">
+            <img 
+              src={logoPath} 
+              alt="Poster AirLab Logo" 
+              className="w-8 h-8 object-contain"
+            />
           </div>
           <h1 className="text-xl font-bold">{t('app.name')}</h1>
         </div>
@@ -215,64 +160,6 @@ export function Sidebar({ className }: SidebarProps = {}) {
         </ul>
       </nav>
 
-      {/* Protected Download Section */}
-      <div className="p-4 border-t border-border">
-        <Dialog open={isDownloadDialogOpen} onOpenChange={setIsDownloadDialogOpen}>
-          <DialogTrigger asChild>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="w-full flex items-center justify-center gap-2"
-              data-testid="button-protected-download"
-            >
-              <Download className="h-4 w-4" />
-              Скачать архив
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Скачать развертывание</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="password">Пароль доступа</Label>
-                <Input
-                  id="download-password"
-                  type="text"
-                  placeholder="Введите пароль (1111)"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleDownload()}
-                  autoComplete="off"
-                  autoCorrect="off"
-                  autoCapitalize="off"
-                  spellCheck={false}
-                  data-testid="input-download-password"
-                />
-              </div>
-              <div className="flex justify-end space-x-2">
-                <Button 
-                  variant="outline" 
-                  onClick={() => {
-                    setIsDownloadDialogOpen(false);
-                    setPassword("");
-                  }}
-                  data-testid="button-cancel-download"
-                >
-                  Отмена
-                </Button>
-                <Button 
-                  onClick={handleDownload}
-                  disabled={isDownloading}
-                  data-testid="button-confirm-download"
-                >
-                  {isDownloading ? "Скачивание..." : "Скачать"}
-                </Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-      </div>
 
       {/* Language Switcher */}
       <div className="p-4 border-t border-border">
