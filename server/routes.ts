@@ -9,6 +9,9 @@ import { channelParserService } from "./services/channelParser";
 import { webChannelParserService } from "./services/webChannelParser";
 import { webSourceParserService } from "./services/webSourceParser";
 import { translationService } from "./services/translationService";
+import { activationService } from "./services/activationService";
+import { activationRateLimiter, apiRateLimiter, extractUserIP } from "./middleware/rateLimiting";
+import { requireActivation, checkActivationSoft, requireActivationForPremium, type AuthenticatedRequest } from "./middleware/activationAuth";
 import { insertChannelPairSchema, insertSettingsSchema, insertScheduledPostSchema, insertDraftPostSchema, insertWebSourceSchema, type ActivationRequest, type ActivationResponse } from "@shared/schema";
 import { z } from "zod";
 
@@ -22,39 +25,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
-  // Helper function to extract and normalize IP address
-  const extractUserIP = (req: any): string => {
-    let ip: string | undefined;
-
-    // 1. Try x-forwarded-for header (first IP in comma-separated list)
-    const xForwardedFor = req.headers['x-forwarded-for'] as string;
-    if (xForwardedFor) {
-      ip = xForwardedFor.split(',')[0]?.trim();
-    }
-
-    // 2. Try req.ip (Express built-in, works with trust proxy)
-    if (!ip || ip === 'unknown') {
-      ip = req.ip;
-    }
-
-    // 3. Fallback to other headers and connection info
-    if (!ip || ip === 'unknown') {
-      ip = req.headers['x-real-ip'] as string ||
-           req.headers['cf-connecting-ip'] as string || // Cloudflare
-           req.headers['x-client-ip'] as string ||
-           req.connection?.remoteAddress ||
-           req.socket?.remoteAddress;
-    }
-
-    // 4. Normalize IPv6-embedded IPv4 addresses
-    if (ip && ip.startsWith('::ffff:')) {
-      ip = ip.substring(7); // Remove IPv6-to-IPv4 mapping prefix
-    }
-
-    // 5. Return canonical form or 'unknown'
-    return ip && ip !== '::1' && ip !== 'unknown' ? ip : 'unknown';
-  };
-
   // User IP endpoint for subscription tracking
   app.get("/api/user-ip", (req, res) => {
     try {
@@ -67,6 +37,131 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Error getting user IP:', error);
       res.status(500).json({ message: "Failed to get user IP" });
+    }
+  });
+
+  // Activation validation endpoint with rate limiting
+  app.post("/api/activation/validate", activationRateLimiter, async (req, res) => {
+    try {
+      const { code } = req.body;
+
+      if (!code || typeof code !== 'string') {
+        // Record failed attempt through rate limiter
+        if ((req as any).recordFailedAttempt) {
+          await (req as any).recordFailedAttempt({ reason: 'missing_code' });
+        }
+        
+        return res.status(400).json({ 
+          success: false, 
+          message: "Activation code is required" 
+        });
+      }
+
+      // Validate activation using the new service
+      const result = await activationService.validateActivationCode(code, req);
+
+      if (result.success) {
+        // Set session token in cookie for future requests
+        if (result.sessionToken) {
+          res.cookie('sessionToken', result.sessionToken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'strict',
+            maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
+          });
+        }
+
+        res.json({
+          success: true,
+          message: result.message,
+          sessionToken: result.sessionToken,
+          activatedAt: result.activatedAt
+        });
+      } else {
+        // Record failed attempt through rate limiter
+        if ((req as any).recordFailedAttempt) {
+          await (req as any).recordFailedAttempt({ 
+            reason: 'invalid_code',
+            code_length: code.trim().length 
+          });
+        }
+        
+        res.status(400).json({
+          success: false,
+          message: result.message
+        });
+      }
+    } catch (error) {
+      console.error('Error validating activation code:', error);
+      
+      // Record failed attempt for system errors
+      if ((req as any).recordFailedAttempt) {
+        await (req as any).recordFailedAttempt({ reason: 'system_error' });
+      }
+      
+      res.status(500).json({
+        success: false,
+        message: "Activation service temporarily unavailable"
+      });
+    }
+  });
+
+  // Session status endpoint  
+  app.get("/api/session/status", checkActivationSoft, async (req: AuthenticatedRequest, res) => {
+    try {
+      const sessionStatus = await activationService.getOrCreateSessionStatus(req);
+      
+      // Update session token in cookie if needed
+      if (sessionStatus.sessionToken) {
+        res.cookie('sessionToken', sessionStatus.sessionToken, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'strict',
+          maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
+        });
+      }
+      
+      res.json({
+        success: true,
+        sessionToken: sessionStatus.sessionToken,
+        isActivated: sessionStatus.isActivated,
+        isBlocked: sessionStatus.isBlocked,
+        trialExpired: sessionStatus.trialExpired,
+        trialTimeRemaining: sessionStatus.trialTimeRemaining,
+        ip: sessionStatus.ip
+      });
+    } catch (error) {
+      console.error('Error getting session status:', error);
+      res.status(500).json({
+        success: false,
+        message: "Failed to get session status"
+      });
+    }
+  });
+
+  // Update session usage endpoint
+  app.post("/api/session/usage", checkActivationSoft, async (req: AuthenticatedRequest, res) => {
+    try {
+      const { usageTimeMs } = req.body;
+      
+      if (!req.userSession?.sessionToken) {
+        return res.status(401).json({
+          success: false,
+          message: "Session token required"
+        });
+      }
+
+      if (typeof usageTimeMs === 'number' && usageTimeMs > 0) {
+        await activationService.updateSessionUsage(req.userSession.sessionToken, usageTimeMs);
+      }
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error updating session usage:', error);
+      res.status(500).json({
+        success: false,
+        message: "Failed to update session usage"
+      });
     }
   });
 

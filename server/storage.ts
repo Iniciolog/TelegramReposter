@@ -15,6 +15,10 @@ import {
   type InsertWebSource,
   type ActivationToken,
   type InsertActivationToken,
+  type RateLimitAttempt,
+  type InsertRateLimitAttempt,
+  type UserSession,
+  type InsertUserSession,
   channelPairs,
   posts,
   activityLogs,
@@ -22,7 +26,9 @@ import {
   scheduledPosts,
   draftPosts,
   webSources,
-  activationTokens
+  activationTokens,
+  rateLimitAttempts,
+  userSessions
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, lte, and, sql } from "drizzle-orm";
@@ -79,6 +85,24 @@ export interface IStorage {
   getActivationToken(token: string): Promise<ActivationToken | undefined>;
   validateAndUseToken(token: string, ip: string): Promise<{ success: boolean; activationToken?: ActivationToken }>;
   generateActivationCode(): string;
+  
+  // Rate Limiting
+  getRateLimitAttempt(ip: string, endpoint: string): Promise<RateLimitAttempt | undefined>;
+  createRateLimitAttempt(attempt: InsertRateLimitAttempt): Promise<RateLimitAttempt>;
+  updateRateLimitAttempt(ip: string, endpoint: string, updates: Partial<InsertRateLimitAttempt>): Promise<RateLimitAttempt | undefined>;
+  isRateLimited(ip: string, endpoint: string): Promise<{ isLimited: boolean; blockedUntil?: Date; attemptCount: number }>;
+  recordFailedAttempt(ip: string, endpoint: string, metadata?: any): Promise<RateLimitAttempt>;
+  cleanupExpiredRateLimits(): Promise<void>;
+  
+  // User Sessions
+  getUserSession(sessionToken: string): Promise<UserSession | undefined>;
+  getUserSessionByIP(ip: string): Promise<UserSession | undefined>;
+  createUserSession(session: InsertUserSession): Promise<UserSession>;
+  updateUserSession(id: string, updates: Partial<InsertUserSession>): Promise<UserSession | undefined>;
+  updateUserSessionByToken(sessionToken: string, updates: Partial<InsertUserSession>): Promise<UserSession | undefined>;
+  activateUserSession(sessionToken: string, activationTokenId: string): Promise<UserSession | undefined>;
+  getUserSessionStatus(sessionToken: string): Promise<{ isActivated: boolean; isBlocked: boolean; trialExpired: boolean } | undefined>;
+  generateSessionToken(): string;
   
   // Analytics
   getStats(): Promise<{
@@ -565,6 +589,220 @@ export class DatabaseStorage implements IStorage {
         errors: 0,
       };
     }
+  }
+
+  // Rate Limiting Implementation
+  async getRateLimitAttempt(ip: string, endpoint: string): Promise<RateLimitAttempt | undefined> {
+    const [attempt] = await db
+      .select()
+      .from(rateLimitAttempts)
+      .where(
+        and(
+          eq(rateLimitAttempts.ip, ip),
+          eq(rateLimitAttempts.endpoint, endpoint)
+        )
+      );
+    return attempt;
+  }
+
+  async createRateLimitAttempt(insertAttempt: InsertRateLimitAttempt): Promise<RateLimitAttempt> {
+    const [attempt] = await db
+      .insert(rateLimitAttempts)
+      .values(insertAttempt)
+      .returning();
+    return attempt;
+  }
+
+  async updateRateLimitAttempt(ip: string, endpoint: string, updates: Partial<InsertRateLimitAttempt>): Promise<RateLimitAttempt | undefined> {
+    const [attempt] = await db
+      .update(rateLimitAttempts)
+      .set({ ...updates, lastAttempt: new Date() })
+      .where(
+        and(
+          eq(rateLimitAttempts.ip, ip),
+          eq(rateLimitAttempts.endpoint, endpoint)
+        )
+      )
+      .returning();
+    return attempt;
+  }
+
+  async isRateLimited(ip: string, endpoint: string): Promise<{ isLimited: boolean; blockedUntil?: Date; attemptCount: number }> {
+    const attempt = await this.getRateLimitAttempt(ip, endpoint);
+    
+    if (!attempt) {
+      return { isLimited: false, attemptCount: 0 };
+    }
+
+    // Check if currently blocked
+    if (attempt.isBlocked && attempt.blockedUntil && new Date() < attempt.blockedUntil) {
+      return { 
+        isLimited: true, 
+        blockedUntil: attempt.blockedUntil, 
+        attemptCount: attempt.attemptCount 
+      };
+    }
+
+    // Check rate limit window (15 minutes)
+    const rateLimitWindow = 15 * 60 * 1000; // 15 minutes in ms
+    const windowStart = new Date(Date.now() - rateLimitWindow);
+    
+    if (attempt.firstAttempt > windowStart && attempt.attemptCount >= 5) {
+      // Update to blocked status
+      await this.updateRateLimitAttempt(ip, endpoint, {
+        isBlocked: true,
+        blockedUntil: new Date(Date.now() + rateLimitWindow) // Block for another 15 minutes
+      });
+      
+      return { 
+        isLimited: true, 
+        blockedUntil: new Date(Date.now() + rateLimitWindow), 
+        attemptCount: attempt.attemptCount 
+      };
+    }
+
+    return { isLimited: false, attemptCount: attempt.attemptCount };
+  }
+
+  async recordFailedAttempt(ip: string, endpoint: string, metadata: any = {}): Promise<RateLimitAttempt> {
+    const existingAttempt = await this.getRateLimitAttempt(ip, endpoint);
+    
+    if (existingAttempt) {
+      // Reset window if enough time has passed
+      const rateLimitWindow = 15 * 60 * 1000; // 15 minutes
+      const windowStart = new Date(Date.now() - rateLimitWindow);
+      
+      if (existingAttempt.firstAttempt < windowStart) {
+        // Reset the attempt counter
+        return await this.updateRateLimitAttempt(ip, endpoint, {
+          attemptCount: 1,
+          firstAttempt: new Date(),
+          isBlocked: false,
+          blockedUntil: null,
+          metadata
+        }) as RateLimitAttempt;
+      } else {
+        // Increment attempt counter
+        const newCount = existingAttempt.attemptCount + 1;
+        const shouldBlock = newCount >= 5;
+        
+        return await this.updateRateLimitAttempt(ip, endpoint, {
+          attemptCount: newCount,
+          isBlocked: shouldBlock,
+          blockedUntil: shouldBlock ? new Date(Date.now() + rateLimitWindow) : undefined,
+          metadata: { ...existingAttempt.metadata, ...metadata }
+        }) as RateLimitAttempt;
+      }
+    } else {
+      // Create new attempt record
+      return await this.createRateLimitAttempt({
+        ip,
+        endpoint,
+        attemptCount: 1,
+        metadata
+      });
+    }
+  }
+
+  async cleanupExpiredRateLimits(): Promise<void> {
+    const now = new Date();
+    await db
+      .delete(rateLimitAttempts)
+      .where(
+        and(
+          eq(rateLimitAttempts.isBlocked, true),
+          lte(rateLimitAttempts.blockedUntil, now)
+        )
+      );
+  }
+
+  // User Sessions Implementation
+  async getUserSession(sessionToken: string): Promise<UserSession | undefined> {
+    const [session] = await db
+      .select()
+      .from(userSessions)
+      .where(eq(userSessions.sessionToken, sessionToken));
+    return session;
+  }
+
+  async getUserSessionByIP(ip: string): Promise<UserSession | undefined> {
+    const [session] = await db
+      .select()
+      .from(userSessions)
+      .where(eq(userSessions.ip, ip))
+      .orderBy(desc(userSessions.createdAt))
+      .limit(1);
+    return session;
+  }
+
+  async createUserSession(insertSession: InsertUserSession): Promise<UserSession> {
+    const [session] = await db
+      .insert(userSessions)
+      .values({
+        ...insertSession,
+        sessionToken: insertSession.sessionToken || this.generateSessionToken(),
+        totalUsageTime: insertSession.totalUsageTime || 0,
+      })
+      .returning();
+    return session;
+  }
+
+  async updateUserSession(id: string, updates: Partial<InsertUserSession>): Promise<UserSession | undefined> {
+    const [session] = await db
+      .update(userSessions)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(userSessions.id, id))
+      .returning();
+    return session;
+  }
+
+  async updateUserSessionByToken(sessionToken: string, updates: Partial<InsertUserSession>): Promise<UserSession | undefined> {
+    const [session] = await db
+      .update(userSessions)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(userSessions.sessionToken, sessionToken))
+      .returning();
+    return session;
+  }
+
+  async activateUserSession(sessionToken: string, activationTokenId: string): Promise<UserSession | undefined> {
+    const [session] = await db
+      .update(userSessions)
+      .set({
+        isActivated: true,
+        activatedAt: new Date(),
+        activationTokenId,
+        updatedAt: new Date(),
+      })
+      .where(eq(userSessions.sessionToken, sessionToken))
+      .returning();
+    return session;
+  }
+
+  async getUserSessionStatus(sessionToken: string): Promise<{ isActivated: boolean; isBlocked: boolean; trialExpired: boolean } | undefined> {
+    const session = await this.getUserSession(sessionToken);
+    
+    if (!session) {
+      return undefined;
+    }
+
+    const trialDuration = 30 * 60 * 1000; // 30 minutes in milliseconds
+    const trialExpired = !session.isActivated && 
+      (session.totalUsageTime >= trialDuration || 
+       (Date.now() - session.trialStartTime.getTime()) >= trialDuration);
+
+    return {
+      isActivated: session.isActivated,
+      isBlocked: session.isBlocked,
+      trialExpired
+    };
+  }
+
+  generateSessionToken(): string {
+    // Generate a random UUID-like session token
+    return 'sess_' + Array.from(crypto.getRandomValues(new Uint8Array(16)))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
   }
 }
 

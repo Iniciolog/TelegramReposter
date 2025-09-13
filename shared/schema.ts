@@ -115,6 +115,37 @@ export const activationTokens = pgTable("activation_tokens", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Rate limiting for activation attempts
+export const rateLimitAttempts = pgTable("rate_limit_attempts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  ip: text("ip").notNull(),
+  endpoint: text("endpoint").notNull(), // e.g., "/api/activation/validate"
+  attemptCount: integer("attempt_count").default(1),
+  firstAttempt: timestamp("first_attempt").defaultNow(),
+  lastAttempt: timestamp("last_attempt").defaultNow(),
+  isBlocked: boolean("is_blocked").default(false),
+  blockedUntil: timestamp("blocked_until"),
+  metadata: jsonb("metadata").default({}), // Additional data for logging
+});
+
+// Server-side user sessions for activation tracking
+export const userSessions = pgTable("user_sessions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  ip: text("ip").notNull(),
+  sessionToken: text("session_token").notNull().unique(), // UUID or similar
+  isActivated: boolean("is_activated").default(false),
+  activatedAt: timestamp("activated_at"),
+  activationTokenId: varchar("activation_token_id").references(() => activationTokens.id),
+  trialStartTime: timestamp("trial_start_time").defaultNow(),
+  totalUsageTime: integer("total_usage_time").default(0), // in milliseconds
+  lastActivity: timestamp("last_activity").defaultNow(),
+  isBlocked: boolean("is_blocked").default(false),
+  blockedReason: text("blocked_reason"),
+  metadata: jsonb("metadata").default({}),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Insert schemas
 export const insertChannelPairSchema = createInsertSchema(channelPairs).omit({
   id: true,
@@ -166,6 +197,18 @@ export const insertActivationTokenSchema = createInsertSchema(activationTokens).
   usedAt: true,
 });
 
+export const insertRateLimitAttemptSchema = createInsertSchema(rateLimitAttempts).omit({
+  id: true,
+  firstAttempt: true,
+  lastAttempt: true,
+});
+
+export const insertUserSessionSchema = createInsertSchema(userSessions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Types
 export type ChannelPair = typeof channelPairs.$inferSelect;
 export type InsertChannelPair = z.infer<typeof insertChannelPairSchema>;
@@ -191,8 +234,14 @@ export type InsertWebSource = z.infer<typeof insertWebSourceSchema>;
 export type ActivationToken = typeof activationTokens.$inferSelect;
 export type InsertActivationToken = z.infer<typeof insertActivationTokenSchema>;
 
+export type RateLimitAttempt = typeof rateLimitAttempts.$inferSelect;
+export type InsertRateLimitAttempt = z.infer<typeof insertRateLimitAttemptSchema>;
+
+export type UserSession = typeof userSessions.$inferSelect;
+export type InsertUserSession = z.infer<typeof insertUserSessionSchema>;
+
 // Subscription tracking types (client-side only)
-export interface UserSession {
+export interface ClientUserSession {
   ip: string;
   startTime: number; // timestamp
   totalUsageTime: number; // in milliseconds

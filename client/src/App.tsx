@@ -4,6 +4,8 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { LanguageProvider } from "@/contexts/LanguageContext";
+import { SubscriptionModal } from "@/components/subscription-modal";
+import { useSubscriptionTracker } from "@/hooks/useSubscriptionTracker";
 import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/dashboard";
 import Channels from "@/pages/channels";
@@ -34,13 +36,42 @@ function Router() {
   );
 }
 
+function AppWithSubscription() {
+  const {
+    isSubscriptionRequired,
+    activateSubscription,
+    getFormattedTimeRemaining,
+  } = useSubscriptionTracker();
+
+  const handleCloseModal = () => {
+    // Modal will be controlled by subscription state
+    // Don't allow closing when subscription is required
+  };
+
+  const handleActivate = () => {
+    activateSubscription();
+  };
+
+  return (
+    <>
+      <Router />
+      <SubscriptionModal
+        isOpen={isSubscriptionRequired}
+        onClose={handleCloseModal}
+        onActivate={handleActivate}
+        timeRemaining={getFormattedTimeRemaining()}
+      />
+    </>
+  );
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <LanguageProvider>
         <TooltipProvider>
           <Toaster />
-          <Router />
+          <AppWithSubscription />
         </TooltipProvider>
       </LanguageProvider>
     </QueryClientProvider>

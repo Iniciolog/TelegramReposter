@@ -1,161 +1,111 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import type { UserSession, SubscriptionStatus, UserIPResponse } from '@shared/schema';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { apiRequest } from '@/lib/queryClient';
+import type { ClientUserSession, SubscriptionStatus, UserIPResponse } from '@shared/schema';
 
-const TRIAL_DURATION = 30 * 60 * 1000; // 30 minutes in milliseconds
-const UPDATE_INTERVAL = 1000; // Update every second
-const STORAGE_KEY = 'subscription_tracker';
+const UPDATE_INTERVAL = 5000; // Update every 5 seconds (less frequent since server manages state)
+const USAGE_SYNC_INTERVAL = 30000; // Sync usage every 30 seconds
 
-// Default session state
-const createDefaultSession = (ip: string): UserSession => ({
-  ip,
-  startTime: Date.now(),
-  totalUsageTime: 0,
-  isSubscriptionActivated: false,
-  lastSeenTime: Date.now(),
-});
+interface ServerSessionStatus {
+  success: boolean;
+  sessionToken: string;
+  isActivated: boolean;
+  isBlocked: boolean;
+  trialExpired: boolean;
+  trialTimeRemaining: number;
+  ip: string;
+}
+
+interface ActivationResponse {
+  success: boolean;
+  message: string;
+  sessionToken?: string;
+  activatedAt?: number;
+}
 
 export const useSubscriptionTracker = () => {
-  const [session, setSession] = useState<UserSession | null>(null);
-  const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus>({
-    isActivated: false,
-    trialTimeRemaining: TRIAL_DURATION,
-    hasExceededTrial: false,
+  const [localUsageTime, setLocalUsageTime] = useState(0);
+  const [lastSyncTime, setLastSyncTime] = useState(Date.now());
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const usageSyncRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const isActiveRef = useRef(true);
+  const queryClient = useQueryClient();
+
+  // Get session status from server
+  const { 
+    data: sessionData, 
+    isLoading: isLoadingSession, 
+    error: sessionError,
+    refetch: refetchSession 
+  } = useQuery<ServerSessionStatus>({
+    queryKey: ['/api/session/status'],
+    refetchInterval: UPDATE_INTERVAL,
+    refetchOnWindowFocus: true,
+    retry: 3,
   });
 
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const isActiveRef = useRef(true);
-
-  // Get user IP address
-  const { data: ipData, isLoading: isLoadingIP } = useQuery<UserIPResponse>({
+  // Get user IP (kept for compatibility)
+  const { data: ipData } = useQuery<UserIPResponse>({
     queryKey: ['/api/user-ip'],
     refetchOnWindowFocus: false,
-    refetchOnMount: true,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
-  // Load session from localStorage
-  const loadSession = useCallback((currentIP: string): UserSession => {
-    try {
-      const storedData = localStorage.getItem(STORAGE_KEY);
-      if (!storedData) {
-        return createDefaultSession(currentIP);
-      }
+  // Mutation for updating usage time on server
+  const updateUsageMutation = useMutation({
+    mutationFn: async (usageTimeMs: number) => {
+      return apiRequest('/api/session/usage', {
+        method: 'POST',
+        body: JSON.stringify({ usageTimeMs }),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+    },
+    onSuccess: () => {
+      // Reset local usage time after successful sync
+      setLocalUsageTime(0);
+      setLastSyncTime(Date.now());
+    },
+    onError: (error) => {
+      console.error('Failed to sync usage time:', error);
+    },
+  });
 
-      const parsed = JSON.parse(storedData) as UserSession;
-      
-      // If IP changed, create new session but keep subscription status
-      if (parsed.ip !== currentIP) {
-        console.log('IP changed from', parsed.ip, 'to', currentIP, '- creating new session');
-        return {
-          ...createDefaultSession(currentIP),
-          isSubscriptionActivated: parsed.isSubscriptionActivated, // Keep subscription status
-          activatedAt: parsed.activatedAt, // Keep activation time
-        };
-      }
+  // Mutation for activation
+  const activationMutation = useMutation({
+    mutationFn: async (code: string) => {
+      return apiRequest('/api/activation/validate', {
+        method: 'POST',
+        body: JSON.stringify({ code }),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+    },
+    onSuccess: () => {
+      // Refresh session data after successful activation
+      queryClient.invalidateQueries({ queryKey: ['/api/session/status'] });
+    },
+  });
 
-      // Update last seen time
-      parsed.lastSeenTime = Date.now();
-      return parsed;
-    } catch (error) {
-      console.error('Error loading session from localStorage:', error);
-      return createDefaultSession(currentIP);
-    }
-  }, []);
-
-  // Save session to localStorage
-  const saveSession = useCallback((sessionData: UserSession) => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(sessionData));
-    } catch (error) {
-      console.error('Error saving session to localStorage:', error);
-    }
-  }, []);
-
-  // Update subscription status based on current session
-  const updateSubscriptionStatus = useCallback((sessionData: UserSession) => {
-    const currentTime = Date.now();
-    const timeUsed = sessionData.totalUsageTime + (currentTime - sessionData.lastSeenTime);
-    const timeRemaining = Math.max(0, TRIAL_DURATION - timeUsed);
-    const hasExceededTrial = timeUsed >= TRIAL_DURATION;
-
-    setSubscriptionStatus({
-      isActivated: sessionData.isSubscriptionActivated,
-      activatedAt: sessionData.activatedAt,
-      trialTimeRemaining: timeRemaining,
-      hasExceededTrial,
-    });
-
-    return { timeUsed, hasExceededTrial };
-  }, []);
-
-  // Activate subscription
-  const activateSubscription = useCallback(() => {
-    if (session) {
-      const activationTime = Date.now();
-      const updatedSession = {
-        ...session,
-        isSubscriptionActivated: true,
-        activatedAt: activationTime,
-        lastSeenTime: activationTime,
-      };
-      setSession(updatedSession);
-      saveSession(updatedSession);
-      updateSubscriptionStatus(updatedSession);
-    }
-  }, [session, saveSession, updateSubscriptionStatus]);
-
-  // Reset session (for testing purposes)
-  const resetSession = useCallback(() => {
-    if (ipData?.ip) {
-      const newSession = createDefaultSession(ipData.ip);
-      setSession(newSession);
-      saveSession(newSession);
-      updateSubscriptionStatus(newSession);
-    }
-  }, [ipData?.ip, saveSession, updateSubscriptionStatus]);
-
-  // Initialize session when IP is available
+  // Track local usage time for non-activated users
   useEffect(() => {
-    if (ipData?.ip && !session) {
-      const loadedSession = loadSession(ipData.ip);
-      setSession(loadedSession);
-      saveSession(loadedSession);
-      updateSubscriptionStatus(loadedSession);
-    }
-  }, [ipData?.ip, session, loadSession, saveSession, updateSubscriptionStatus]);
-
-  // Update usage time periodically
-  useEffect(() => {
-    if (!session || session.isSubscriptionActivated) {
-      return;
+    if (!sessionData || sessionData.isActivated) {
+      return; // Don't track usage for activated users
     }
 
-    const updateUsageTime = () => {
-      if (!isActiveRef.current || !session) return;
+    const updateLocalUsage = () => {
+      if (!isActiveRef.current || sessionData.isActivated) return;
 
-      const currentTime = Date.now();
-      const timeDelta = currentTime - session.lastSeenTime;
+      const now = Date.now();
+      const timeDelta = now - lastSyncTime;
       
-      const updatedSession = {
-        ...session,
-        totalUsageTime: session.totalUsageTime + timeDelta,
-        lastSeenTime: currentTime,
-      };
-
-      setSession(updatedSession);
-      saveSession(updatedSession);
-      
-      const { hasExceededTrial } = updateSubscriptionStatus(updatedSession);
-
-      // If trial period exceeded, we could trigger some action here
-      if (hasExceededTrial && !session.isSubscriptionActivated) {
-        console.log('Trial period exceeded! Subscription activation required.');
-        // Here you could show a modal, redirect, or take other actions
-      }
+      setLocalUsageTime(prev => prev + Math.min(timeDelta, UPDATE_INTERVAL));
+      setLastSyncTime(now);
     };
 
-    intervalRef.current = setInterval(updateUsageTime, UPDATE_INTERVAL);
+    intervalRef.current = setInterval(updateLocalUsage, UPDATE_INTERVAL);
 
     return () => {
       if (intervalRef.current) {
@@ -163,21 +113,39 @@ export const useSubscriptionTracker = () => {
         intervalRef.current = null;
       }
     };
-  }, [session, saveSession, updateSubscriptionStatus]);
+  }, [sessionData, lastSyncTime]);
+
+  // Sync usage time to server periodically
+  useEffect(() => {
+    if (!sessionData || sessionData.isActivated) {
+      return; // Don't sync usage for activated users
+    }
+
+    const syncUsage = () => {
+      if (localUsageTime > 0 && !updateUsageMutation.isPending) {
+        updateUsageMutation.mutate(localUsageTime);
+      }
+    };
+
+    usageSyncRef.current = setInterval(syncUsage, USAGE_SYNC_INTERVAL);
+
+    return () => {
+      if (usageSyncRef.current) {
+        clearInterval(usageSyncRef.current);
+        usageSyncRef.current = null;
+      }
+    };
+  }, [sessionData, localUsageTime, updateUsageMutation]);
 
   // Handle page visibility changes
   useEffect(() => {
     const handleVisibilityChange = () => {
+      const wasActive = isActiveRef.current;
       isActiveRef.current = !document.hidden;
       
-      if (!document.hidden && session) {
-        // Update last seen time when page becomes visible
-        const updatedSession = {
-          ...session,
-          lastSeenTime: Date.now(),
-        };
-        setSession(updatedSession);
-        saveSession(updatedSession);
+      // If page becomes visible and we have pending usage, sync it
+      if (!wasActive && isActiveRef.current && localUsageTime > 0) {
+        updateUsageMutation.mutate(localUsageTime);
       }
     };
 
@@ -186,32 +154,89 @@ export const useSubscriptionTracker = () => {
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [session, saveSession]);
+  }, [localUsageTime, updateUsageMutation]);
+
+  // Sync usage when component unmounts
+  useEffect(() => {
+    return () => {
+      if (localUsageTime > 0 && sessionData && !sessionData.isActivated) {
+        // Fire-and-forget sync on unmount
+        updateUsageMutation.mutate(localUsageTime);
+      }
+    };
+  }, []);
+
+  // Calculate subscription status based on server data
+  const subscriptionStatus: SubscriptionStatus = {
+    isActivated: sessionData?.isActivated || false,
+    activatedAt: undefined, // Server doesn't return this currently
+    trialTimeRemaining: sessionData?.trialTimeRemaining || 0,
+    hasExceededTrial: sessionData?.trialExpired || false,
+  };
+
+  // Create client session compatible object
+  const session: ClientUserSession | null = sessionData ? {
+    ip: sessionData.ip,
+    startTime: Date.now(), // Approximation
+    totalUsageTime: 0, // Server manages this
+    isSubscriptionActivated: sessionData.isActivated,
+    activatedAt: undefined,
+    lastSeenTime: Date.now(),
+  } : null;
+
+  // Activate subscription using server endpoint
+  const activateSubscription = useCallback(async (code: string): Promise<{ success: boolean; message: string }> => {
+    try {
+      const result = await activationMutation.mutateAsync(code);
+      return {
+        success: result.success,
+        message: result.message || 'Activation successful'
+      };
+    } catch (error: any) {
+      return {
+        success: false,
+        message: error.message || 'Activation failed'
+      };
+    }
+  }, [activationMutation]);
+
+  // Reset session (refresh from server)
+  const resetSession = useCallback(async () => {
+    await refetchSession();
+    setLocalUsageTime(0);
+    setLastSyncTime(Date.now());
+  }, [refetchSession]);
 
   // Format time remaining for display
   const getFormattedTimeRemaining = useCallback(() => {
-    const minutes = Math.floor(subscriptionStatus.trialTimeRemaining / (60 * 1000));
-    const seconds = Math.floor((subscriptionStatus.trialTimeRemaining % (60 * 1000)) / 1000);
+    const timeRemaining = sessionData?.trialTimeRemaining || 0;
+    const minutes = Math.floor(timeRemaining / (60 * 1000));
+    const seconds = Math.floor((timeRemaining % (60 * 1000)) / 1000);
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-  }, [subscriptionStatus.trialTimeRemaining]);
+  }, [sessionData?.trialTimeRemaining]);
 
-  // Format total usage time for display
+  // Format total usage time (approximation for display)
   const getFormattedUsageTime = useCallback(() => {
-    if (!session) return '0:00';
-    const totalTime = session.totalUsageTime + (Date.now() - session.lastSeenTime);
-    const minutes = Math.floor(totalTime / (60 * 1000));
-    const seconds = Math.floor((totalTime % (60 * 1000)) / 1000);
+    if (!sessionData) return '0:00';
+    
+    // Estimate based on trial time remaining
+    const trialDuration = 30 * 60 * 1000; // 30 minutes
+    const estimatedUsage = trialDuration - sessionData.trialTimeRemaining + localUsageTime;
+    
+    const minutes = Math.floor(estimatedUsage / (60 * 1000));
+    const seconds = Math.floor((estimatedUsage % (60 * 1000)) / 1000);
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-  }, [session]);
+  }, [sessionData?.trialTimeRemaining, localUsageTime]);
 
   return {
     // State
     session,
     subscriptionStatus,
-    isLoading: isLoadingIP || !session,
+    isLoading: isLoadingSession,
+    error: sessionError,
     
     // Actions
-    activateSubscription,
+    activateSubscription, // Now takes code parameter and returns Promise
     resetSession,
     
     // Computed values
@@ -221,6 +246,15 @@ export const useSubscriptionTracker = () => {
     // Convenience flags
     isTrialActive: !subscriptionStatus.isActivated && !subscriptionStatus.hasExceededTrial,
     isSubscriptionRequired: subscriptionStatus.hasExceededTrial && !subscriptionStatus.isActivated,
-    currentIP: ipData?.ip,
+    currentIP: sessionData?.ip || ipData?.ip,
+    
+    // Server sync status
+    isActivating: activationMutation.isPending,
+    activationError: activationMutation.error,
+    isSyncingUsage: updateUsageMutation.isPending,
+    
+    // Server state flags
+    isBlocked: sessionData?.isBlocked || false,
+    sessionToken: sessionData?.sessionToken,
   };
 };

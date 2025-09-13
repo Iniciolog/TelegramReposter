@@ -142,6 +142,19 @@ const translations: Translations = {
   'settings.saving': { en: 'Saving...', ru: 'Сохранение...' },
   'settings.save': { en: 'Save Settings', ru: 'Сохранить настройки' },
 
+  // Subscription Modal
+  'subscription.title': { en: 'Trial Period Expired', ru: 'Пробный период истёк' },
+  'subscription.subtitle': { en: 'To continue using the service, please activate your subscription', ru: 'Для продолжения использования оформите подписку' },
+  'subscription.payment-link': { en: 'Subscribe Now', ru: 'Оформить подписку' },
+  'subscription.activation-code': { en: 'Activation Code', ru: 'Код активации' },
+  'subscription.code-placeholder': { en: 'Enter activation code', ru: 'Введите код активации' },
+  'subscription.activate-button': { en: 'Activate', ru: 'Активировать' },
+  'subscription.try-later': { en: 'Try Later', ru: 'Попробовать позже' },
+  'subscription.activating': { en: 'Activating...', ru: 'Активация...' },
+  'subscription.success': { en: 'Subscription activated successfully!', ru: 'Подписка успешно активирована!' },
+  'subscription.error': { en: 'Invalid or expired activation code', ru: 'Неверный или истёкший код активации' },
+  'subscription.network-error': { en: 'Network error. Please try again.', ru: 'Ошибка сети. Попробуйте снова.' },
+
   // Common
   'common.just-now': { en: 'Just now', ru: 'Только что' }
 };
