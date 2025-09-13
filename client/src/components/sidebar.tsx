@@ -30,6 +30,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+import { useSubscriptionTracker } from "@/hooks/useSubscriptionTracker";
 import { Separator } from "@/components/ui/separator";
 
 const navigation = [
@@ -94,22 +95,35 @@ export function Sidebar({ className }: SidebarProps = {}) {
   const { t } = useLanguage();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { toast } = useToast();
+  const { sessionToken } = useSubscriptionTracker();
 
   const handleLogout = async () => {
     try {
-      // Очистить localStorage/sessionStorage
-      localStorage.clear();
-      sessionStorage.clear();
-      
-      // Перезагрузить страницу для сброса состояния
-      window.location.reload();
+      // Вызвать logout endpoint на сервере с sessionToken
+      const response = await fetch('/api/logout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(sessionToken && { 'X-Session-Token': sessionToken })
+        }
+      });
+
+      if (response.ok) {
+        // Очистить localStorage/sessionStorage
+        localStorage.clear();
+        sessionStorage.clear();
+        
+        // Перезагрузить страницу для сброса состояния
+        window.location.reload();
+      } else {
+        throw new Error('Logout failed');
+      }
     } catch (error) {
       console.error('Logout error:', error);
-      toast({
-        title: "Ошибка выхода",
-        description: "Попробуйте перезагрузить страницу",
-        variant: "destructive"
-      });
+      // Все равно попробовать очистить локально и перезагрузить
+      localStorage.clear();
+      sessionStorage.clear();
+      window.location.reload();
     }
   };
 

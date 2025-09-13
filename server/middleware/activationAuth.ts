@@ -10,6 +10,8 @@ interface AuthenticatedRequest extends Request {
     isActivated: boolean;
     isBlocked: boolean;
     trialExpired: boolean;
+    totalUsageTime?: number | null;
+    trialStartTime?: Date | null;
   };
 }
 
@@ -92,7 +94,9 @@ export async function requireActivation(req: AuthenticatedRequest, res: Response
       sessionToken: userSession.sessionToken,
       isActivated: sessionStatus.isActivated,
       isBlocked: sessionStatus.isBlocked,
-      trialExpired: sessionStatus.trialExpired
+      trialExpired: sessionStatus.trialExpired,
+      totalUsageTime: userSession.totalUsageTime,
+      trialStartTime: userSession.trialStartTime
     };
 
     next();
@@ -117,8 +121,45 @@ export async function checkActivationSoft(req: AuthenticatedRequest, res: Respon
                         req.cookies?.sessionToken ||
                         req.query.sessionToken as string;
 
-    // If no session token, create one for this IP
+    // If no session token, try to find existing session by IP first
     if (!sessionToken) {
+      // First, try to reuse existing session by IP
+      const existingSession = await storage.getUserSessionByIP(ip);
+      
+      if (existingSession) {
+        console.log('🔄 Reusing existing session by IP:', {
+          sessionId: existingSession.id?.substring(0, 8),
+          totalUsageTime: existingSession.totalUsageTime,
+          ip: ip
+        });
+        
+        // Set existing session token in cookie
+        res.cookie('sessionToken', existingSession.sessionToken, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'strict',
+          maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
+        });
+        
+        // Use existing session for request
+        const sessionStatus = await storage.getUserSessionStatus(existingSession.sessionToken);
+        req.userSession = {
+          id: existingSession.id,
+          ip: existingSession.ip,
+          sessionToken: existingSession.sessionToken,
+          isActivated: sessionStatus?.isActivated || false,
+          isBlocked: sessionStatus?.isBlocked || false,
+          trialExpired: sessionStatus?.trialExpired || false,
+          totalUsageTime: existingSession.totalUsageTime,
+          trialStartTime: existingSession.trialStartTime
+        };
+        
+        return next();
+      }
+      
+      console.log('🆕 Creating new session for IP:', ip);
+      
+      // Only create new session if no existing session found
       const newSessionToken = storage.generateSessionToken();
       const newSession = await storage.createUserSession({
         ip,
@@ -148,7 +189,9 @@ export async function checkActivationSoft(req: AuthenticatedRequest, res: Respon
         sessionToken: newSession.sessionToken,
         isActivated: false,
         isBlocked: false,
-        trialExpired: false
+        trialExpired: false,
+        totalUsageTime: newSession.totalUsageTime,
+        trialStartTime: newSession.trialStartTime
       };
 
       return next();
@@ -179,7 +222,9 @@ export async function checkActivationSoft(req: AuthenticatedRequest, res: Respon
         sessionToken: newSession.sessionToken,
         isActivated: false,
         isBlocked: false,
-        trialExpired: false
+        trialExpired: false,
+        totalUsageTime: newSession.totalUsageTime,
+        trialStartTime: newSession.trialStartTime
       };
 
       return next();
@@ -215,7 +260,9 @@ export async function checkActivationSoft(req: AuthenticatedRequest, res: Respon
       sessionToken: userSession.sessionToken,
       isActivated: sessionStatus.isActivated,
       isBlocked: sessionStatus.isBlocked,
-      trialExpired: sessionStatus.trialExpired
+      trialExpired: sessionStatus.trialExpired,
+      totalUsageTime: userSession.totalUsageTime,
+      trialStartTime: userSession.trialStartTime
     };
 
     next();

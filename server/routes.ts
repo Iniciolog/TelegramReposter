@@ -139,6 +139,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Logout endpoint
+  app.post("/api/logout", checkActivationSoft, async (req: AuthenticatedRequest, res) => {
+    try {
+      console.log('🚪 Logout request received');
+      const sessionToken = req.userSession?.sessionToken;
+      
+      if (sessionToken) {
+        console.log('🚪 Deactivating session:', sessionToken.substring(0, 10) + '...');
+        
+        // Get current session for debugging
+        const currentSession = await storage.getUserSession(sessionToken);
+        console.log('🚪 Current session before update:', currentSession ? {
+          id: currentSession.id,
+          isActivated: currentSession.isActivated,
+          totalUsageTime: currentSession.totalUsageTime,
+          trialStartTime: currentSession.trialStartTime
+        } : 'not found');
+        
+        // Deactivate the session and expire trial to force re-authentication
+        const updatedSession = await storage.updateUserSessionByToken(sessionToken, {
+          isActivated: false,
+          lastActivity: new Date(),
+          totalUsageTime: 30 * 60 * 1000, // Set to max trial time to expire trial
+        });
+        
+        console.log('🚪 Session after update:', updatedSession ? {
+          id: updatedSession.id,
+          isActivated: updatedSession.isActivated,
+          totalUsageTime: updatedSession.totalUsageTime,
+          trialStartTime: updatedSession.trialStartTime
+        } : 'update failed');
+        
+        console.log('🚪 Session deactivated successfully');
+      }
+      
+      // Clear the session cookie
+      res.clearCookie('sessionToken', {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict'
+      });
+      
+      // Ensure JSON response
+      res.setHeader('Content-Type', 'application/json');
+      res.status(200).json({
+        success: true,
+        message: "Successfully logged out"
+      });
+      console.log('🚪 Logout response sent');
+    } catch (error) {
+      console.error('❌ Error logging out:', error);
+      res.setHeader('Content-Type', 'application/json');
+      res.status(500).json({
+        success: false,
+        message: "Failed to logout"
+      });
+    }
+  });
+
   // Update session usage endpoint
   app.post("/api/session/usage", checkActivationSoft, async (req: AuthenticatedRequest, res) => {
     try {

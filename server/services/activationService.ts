@@ -140,21 +140,45 @@ export class ActivationService {
   async getOrCreateSessionStatus(req: Request): Promise<SessionStatus> {
     const ip = extractUserIP(req);
     
-    // Try to get session token from various sources
-    const sessionToken = req.headers['x-session-token'] as string || 
-                        req.cookies?.sessionToken ||
-                        req.query.sessionToken as string;
+    // First priority: use session resolved by middleware
+    let userSession = (req as any).userSession;
+    
+    if (userSession) {
+      console.log('🔍 Session from middleware:', {
+        sessionId: userSession.id?.substring(0, 8),
+        sessionToken: userSession.sessionToken?.substring(0, 10),
+        totalUsageTime: userSession.totalUsageTime,
+        source: 'middleware'
+      });
+    } else {
+      // Fallback: resolve session manually (same logic as middleware)
+      const sessionToken = req.headers['x-session-token'] as string || 
+                          req.cookies?.sessionToken ||
+                          req.query.sessionToken as string;
 
-    let userSession;
+      if (sessionToken) {
+        // Try to get existing session by token
+        userSession = await storage.getUserSession(sessionToken);
+        console.log('🔍 Session lookup by token:', {
+          sessionToken: sessionToken?.substring(0, 10),
+          found: !!userSession,
+          sessionId: userSession?.id?.substring(0, 8),
+          totalUsageTime: userSession?.totalUsageTime,
+          source: 'token_lookup'
+        });
+      }
 
-    if (sessionToken) {
-      // Try to get existing session by token
-      userSession = await storage.getUserSession(sessionToken);
-    }
-
-    if (!userSession && ip !== 'unknown') {
-      // Try to get session by IP
-      userSession = await storage.getUserSessionByIP(ip);
+      // Only fallback to IP-based session if NO sessionToken was provided
+      if (!userSession && !sessionToken && ip !== 'unknown') {
+        // Try to get session by IP
+        userSession = await storage.getUserSessionByIP(ip);
+        console.log('🔍 Session lookup by IP (no token provided):', {
+          ip,
+          found: !!userSession,
+          sessionId: userSession?.id?.substring(0, 8),
+          source: 'ip_lookup'
+        });
+      }
     }
 
     if (!userSession) {
@@ -265,6 +289,7 @@ export class ActivationService {
    */
   private isTrialExpired(session: any): boolean {
     if (session.isActivated) {
+      console.log('🔍 Trial check: User is activated, not expired');
       return false; // Activated users don't have trial limits
     }
 
@@ -272,7 +297,23 @@ export class ActivationService {
     const currentTime = Date.now();
     const timeElapsed = currentTime - trialStartTime;
     
-    return session.totalUsageTime >= TRIAL_DURATION_MS || timeElapsed >= TRIAL_DURATION_MS;
+    const usageExpired = session.totalUsageTime >= TRIAL_DURATION_MS;
+    const timeExpired = timeElapsed >= TRIAL_DURATION_MS;
+    const isExpired = usageExpired || timeExpired;
+    
+    console.log('🔍 Trial expiration check:', {
+      sessionId: session.id?.substring(0, 8),
+      sessionToken: session.sessionToken?.substring(0, 10),
+      isActivated: session.isActivated,
+      totalUsageTime: session.totalUsageTime,
+      TRIAL_DURATION_MS,
+      usageExpired,
+      timeElapsed,
+      timeExpired,
+      isExpired
+    });
+    
+    return isExpired;
   }
 
   /**
