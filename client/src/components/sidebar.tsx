@@ -95,6 +95,24 @@ export function Sidebar({ className }: SidebarProps = {}) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { toast } = useToast();
 
+  const handleLogout = async () => {
+    try {
+      // Очистить localStorage/sessionStorage
+      localStorage.clear();
+      sessionStorage.clear();
+      
+      // Перезагрузить страницу для сброса состояния
+      window.location.reload();
+    } catch (error) {
+      console.error('Logout error:', error);
+      toast({
+        title: "Ошибка выхода",
+        description: "Попробуйте перезагрузить страницу",
+        variant: "destructive"
+      });
+    }
+  };
+
   // Close mobile menu on route change
   useEffect(() => {
     setIsMobileMenuOpen(false);
@@ -178,6 +196,8 @@ export function Sidebar({ className }: SidebarProps = {}) {
           </div>
           <button 
             className="text-muted-foreground hover:text-foreground"
+            onClick={handleLogout}
+            title="Выйти из системы"
             data-testid="button-logout"
           >
             <LogOut className="h-4 w-4" />
