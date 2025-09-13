@@ -86,7 +86,7 @@ const translations: Translations = {
   'setup.creating': { en: 'Creating...', ru: 'Создание...' },
 
   // App Brand
-  'app.name': { en: 'TeleSync Pro', ru: 'ТелеСинк Про' },
+  'app.name': { en: 'Poster AirLab.', ru: 'Poster AirLab.' },
   'app.user': { en: 'Admin User', ru: 'Администратор' },
   'app.plan': { en: 'Premium Plan', ru: 'Премиум план' },
 
