@@ -286,36 +286,6 @@ export class DatabaseStorage implements IStorage {
     }
   }
 
-  async getStats(): Promise<{
-    activeChannels: number;
-    postsToday: number;
-    successRate: number;
-    errors: number;
-  }> {
-    const channelPairs = await this.getChannelPairs();
-    const posts = await this.getPosts();
-    
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    const postsToday = posts.filter(post => 
-      post.createdAt && new Date(post.createdAt) >= today
-    ).length;
-    
-    const successfulPosts = posts.filter(post => post.status === "posted").length;
-    const totalPosts = posts.length;
-    const successRate = totalPosts > 0 ? Math.round((successfulPosts / totalPosts) * 100) : 0;
-    
-    const errors = posts.filter(post => post.status === "failed").length;
-    const activeChannels = channelPairs.filter(pair => pair.status === "active").length;
-    
-    return {
-      activeChannels,
-      postsToday,
-      successRate,
-      errors,
-    };
-  }
 
   // Scheduled Posts Implementation
   async getScheduledPosts(channelPairId?: string): Promise<ScheduledPost[]> {
@@ -647,7 +617,7 @@ export class DatabaseStorage implements IStorage {
     const rateLimitWindow = 15 * 60 * 1000; // 15 minutes in ms
     const windowStart = new Date(Date.now() - rateLimitWindow);
     
-    if (attempt.firstAttempt > windowStart && attempt.attemptCount >= 5) {
+    if ((attempt.firstAttempt || new Date()) > windowStart && (attempt.attemptCount || 0) >= 5) {
       // Update to blocked status
       await this.updateRateLimitAttempt(ip, endpoint, {
         isBlocked: true,
@@ -657,11 +627,11 @@ export class DatabaseStorage implements IStorage {
       return { 
         isLimited: true, 
         blockedUntil: new Date(Date.now() + rateLimitWindow), 
-        attemptCount: attempt.attemptCount 
+        attemptCount: attempt.attemptCount || 0 
       };
     }
 
-    return { isLimited: false, attemptCount: attempt.attemptCount };
+    return { isLimited: false, attemptCount: attempt.attemptCount || 0 };
   }
 
   async recordFailedAttempt(ip: string, endpoint: string, metadata: any = {}): Promise<RateLimitAttempt> {
@@ -672,7 +642,7 @@ export class DatabaseStorage implements IStorage {
       const rateLimitWindow = 15 * 60 * 1000; // 15 minutes
       const windowStart = new Date(Date.now() - rateLimitWindow);
       
-      if (existingAttempt.firstAttempt < windowStart) {
+      if ((existingAttempt.firstAttempt || new Date()) < windowStart) {
         // Reset the attempt counter
         return await this.updateRateLimitAttempt(ip, endpoint, {
           attemptCount: 1,
@@ -683,14 +653,14 @@ export class DatabaseStorage implements IStorage {
         }) as RateLimitAttempt;
       } else {
         // Increment attempt counter
-        const newCount = existingAttempt.attemptCount + 1;
+        const newCount = (existingAttempt.attemptCount || 0) + 1;
         const shouldBlock = newCount >= 5;
         
         return await this.updateRateLimitAttempt(ip, endpoint, {
           attemptCount: newCount,
           isBlocked: shouldBlock,
           blockedUntil: shouldBlock ? new Date(Date.now() + rateLimitWindow) : undefined,
-          metadata: { ...existingAttempt.metadata, ...metadata }
+          metadata: { ...(existingAttempt.metadata || {}), ...metadata }
         }) as RateLimitAttempt;
       }
     } else {
