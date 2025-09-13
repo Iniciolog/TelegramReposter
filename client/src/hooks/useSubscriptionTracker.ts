@@ -54,13 +54,7 @@ export const useSubscriptionTracker = () => {
   // Mutation for updating usage time on server
   const updateUsageMutation = useMutation({
     mutationFn: async (usageTimeMs: number) => {
-      return apiRequest('/api/session/usage', {
-        method: 'POST',
-        body: JSON.stringify({ usageTimeMs }),
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
+      return apiRequest('POST', '/api/session/usage', { usageTimeMs });
     },
     onSuccess: () => {
       // Reset local usage time after successful sync

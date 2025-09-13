@@ -7,6 +7,7 @@ import { LanguageProvider } from "@/contexts/LanguageContext";
 import { SubscriptionModal } from "@/components/subscription-modal";
 import { Footer } from "@/components/footer";
 import { useSubscriptionTracker } from "@/hooks/useSubscriptionTracker";
+import { useAuthGuard } from "@/hooks/useAuthGuard";
 import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/dashboard";
 import Channels from "@/pages/channels";
@@ -39,19 +40,11 @@ function Router() {
 
 function AppWithSubscription() {
   const {
-    isSubscriptionRequired,
-    activateSubscription,
-    getFormattedTimeRemaining,
-  } = useSubscriptionTracker();
-
-  const handleCloseModal = () => {
-    // Modal will be controlled by subscription state
-    // Don't allow closing when subscription is required
-  };
-
-  const handleActivate = () => {
-    activateSubscription();
-  };
+    isAuthModalOpen,
+    closeAuthModal,
+    handleAuth,
+    timeRemaining
+  } = useAuthGuard();
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -60,10 +53,10 @@ function AppWithSubscription() {
       </div>
       <Footer />
       <SubscriptionModal
-        isOpen={isSubscriptionRequired}
-        onClose={handleCloseModal}
-        onActivate={handleActivate}
-        timeRemaining={getFormattedTimeRemaining()}
+        isOpen={isAuthModalOpen}
+        onClose={closeAuthModal}
+        onActivate={handleAuth}
+        timeRemaining={timeRemaining}
       />
     </div>
   );
