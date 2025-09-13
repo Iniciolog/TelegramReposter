@@ -13,13 +13,16 @@ import {
   type InsertDraftPost,
   type WebSource,
   type InsertWebSource,
+  type ActivationToken,
+  type InsertActivationToken,
   channelPairs,
   posts,
   activityLogs,
   settings,
   scheduledPosts,
   draftPosts,
-  webSources
+  webSources,
+  activationTokens
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, lte, and, sql } from "drizzle-orm";
@@ -70,6 +73,12 @@ export interface IStorage {
   createWebSource(webSource: InsertWebSource): Promise<WebSource>;
   updateWebSource(id: string, webSource: Partial<InsertWebSource>): Promise<WebSource | undefined>;
   deleteWebSource(id: string): Promise<boolean>;
+  
+  // Activation Tokens
+  createActivationToken(token: InsertActivationToken): Promise<ActivationToken>;
+  getActivationToken(token: string): Promise<ActivationToken | undefined>;
+  validateAndUseToken(token: string, ip: string): Promise<{ success: boolean; activationToken?: ActivationToken }>;
+  generateActivationCode(): string;
   
   // Analytics
   getStats(): Promise<{
@@ -437,6 +446,124 @@ export class DatabaseStorage implements IStorage {
     } catch (error) {
       console.error('Error deleting web source:', error);
       return false;
+    }
+  }
+
+  // Activation Token methods
+  async createActivationToken(insertToken: InsertActivationToken): Promise<ActivationToken> {
+    const [token] = await db
+      .insert(activationTokens)
+      .values(insertToken)
+      .returning();
+    return token;
+  }
+
+  async getActivationToken(token: string): Promise<ActivationToken | undefined> {
+    const [result] = await db
+      .select()
+      .from(activationTokens)
+      .where(eq(activationTokens.token, token));
+    return result || undefined;
+  }
+
+  async validateAndUseToken(token: string, ip: string): Promise<{ success: boolean; activationToken?: ActivationToken }> {
+    const activationToken = await this.getActivationToken(token);
+    
+    if (!activationToken) {
+      return { success: false };
+    }
+
+    // Check if token is already used
+    if (activationToken.isUsed) {
+      return { success: false };
+    }
+
+    // Check if token is expired
+    if (activationToken.expiresAt && new Date() > activationToken.expiresAt) {
+      return { success: false };
+    }
+
+    // Mark token as used and associate with IP
+    const [updatedToken] = await db
+      .update(activationTokens)
+      .set({
+        isUsed: true,
+        usedAt: new Date(),
+        ip: ip,
+      })
+      .where(eq(activationTokens.token, token))
+      .returning();
+
+    return { 
+      success: true, 
+      activationToken: updatedToken 
+    };
+  }
+
+  generateActivationCode(): string {
+    // Generate a random 8-character activation code
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let result = '';
+    for (let i = 0; i < 8; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
+  }
+
+  async getStats(): Promise<{
+    activeChannels: number;
+    postsToday: number;
+    successRate: number;
+    errors: number;
+  }> {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    try {
+      // Count active channels
+      const [activeChannelsResult] = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(channelPairs)
+        .where(eq(channelPairs.status, 'active'));
+      const activeChannels = activeChannelsResult?.count ?? 0;
+
+      // Count posts created today
+      const [postsToday] = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(posts)
+        .where(sql`DATE(${posts.createdAt}) = DATE(${today})`);
+      const postsCount = postsToday?.count ?? 0;
+
+      // Calculate success rate (posted vs failed)
+      const [successfulPosts] = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(posts)
+        .where(eq(posts.status, 'posted'));
+      
+      const [failedPosts] = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(posts)
+        .where(eq(posts.status, 'failed'));
+
+      const successful = successfulPosts?.count ?? 0;
+      const failed = failedPosts?.count ?? 0;
+      const total = successful + failed;
+      const successRate = total > 0 ? (successful / total) * 100 : 100;
+
+      return {
+        activeChannels,
+        postsToday: postsCount,
+        successRate: Math.round(successRate),
+        errors: failed,
+      };
+    } catch (error) {
+      console.error('Error getting stats:', error);
+      return {
+        activeChannels: 0,
+        postsToday: 0,
+        successRate: 0,
+        errors: 0,
+      };
     }
   }
 }

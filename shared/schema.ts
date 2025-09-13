@@ -103,6 +103,18 @@ export const draftPosts = pgTable("draft_posts", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Activation tokens for subscription management
+export const activationTokens = pgTable("activation_tokens", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  token: text("token").notNull().unique(), // Activation code
+  ip: text("ip"), // IP address associated with this token
+  isUsed: boolean("is_used").default(false),
+  usedAt: timestamp("used_at"),
+  expiresAt: timestamp("expires_at"), // Token expiration
+  metadata: jsonb("metadata").default({}), // Additional data
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Insert schemas
 export const insertChannelPairSchema = createInsertSchema(channelPairs).omit({
   id: true,
@@ -147,6 +159,13 @@ export const insertWebSourceSchema = createInsertSchema(webSources).omit({
   lastParsed: true,
 });
 
+export const insertActivationTokenSchema = createInsertSchema(activationTokens).omit({
+  id: true,
+  createdAt: true,
+  isUsed: true,
+  usedAt: true,
+});
+
 // Types
 export type ChannelPair = typeof channelPairs.$inferSelect;
 export type InsertChannelPair = z.infer<typeof insertChannelPairSchema>;
@@ -168,3 +187,40 @@ export type InsertDraftPost = z.infer<typeof insertDraftPostSchema>;
 
 export type WebSource = typeof webSources.$inferSelect;
 export type InsertWebSource = z.infer<typeof insertWebSourceSchema>;
+
+export type ActivationToken = typeof activationTokens.$inferSelect;
+export type InsertActivationToken = z.infer<typeof insertActivationTokenSchema>;
+
+// Subscription tracking types (client-side only)
+export interface UserSession {
+  ip: string;
+  startTime: number; // timestamp
+  totalUsageTime: number; // in milliseconds
+  isSubscriptionActivated: boolean;
+  activatedAt?: number; // timestamp when subscription was activated
+  lastSeenTime: number; // timestamp
+}
+
+export interface SubscriptionStatus {
+  isActivated: boolean;
+  activatedAt?: number; // timestamp
+  trialTimeRemaining: number; // in milliseconds
+  hasExceededTrial: boolean;
+}
+
+export interface UserIPResponse {
+  ip: string;
+  timestamp: string;
+}
+
+// Activation request/response types
+export interface ActivationRequest {
+  code: string;
+  ip?: string; // Optional, server will extract from request
+}
+
+export interface ActivationResponse {
+  success: boolean;
+  message: string;
+  activatedAt?: number;
+}

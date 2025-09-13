@@ -4,6 +4,7 @@ import { ChannelPairs } from "@/components/channel-pairs";
 import { RecentActivity } from "@/components/recent-activity";
 import { PerformanceChart } from "@/components/performance-chart";
 import { QuickSetup } from "@/components/quick-setup";
+import { SubscriptionTracker } from "@/components/subscription-tracker";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Bell, Plus } from "lucide-react";
@@ -61,6 +62,10 @@ export default function Dashboard() {
 
           <div className="mb-8">
             <PerformanceChart />
+          </div>
+
+          <div className="mb-8">
+            <SubscriptionTracker />
           </div>
 
           <QuickSetup />

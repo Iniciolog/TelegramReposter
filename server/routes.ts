@@ -9,7 +9,7 @@ import { channelParserService } from "./services/channelParser";
 import { webChannelParserService } from "./services/webChannelParser";
 import { webSourceParserService } from "./services/webSourceParser";
 import { translationService } from "./services/translationService";
-import { insertChannelPairSchema, insertSettingsSchema, insertScheduledPostSchema, insertDraftPostSchema, insertWebSourceSchema } from "@shared/schema";
+import { insertChannelPairSchema, insertSettingsSchema, insertScheduledPostSchema, insertDraftPostSchema, insertWebSourceSchema, type ActivationRequest, type ActivationResponse } from "@shared/schema";
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -20,6 +20,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
       timestamp: new Date().toISOString(),
       message: "Server is running" 
     });
+  });
+
+  // Helper function to extract and normalize IP address
+  const extractUserIP = (req: any): string => {
+    let ip: string | undefined;
+
+    // 1. Try x-forwarded-for header (first IP in comma-separated list)
+    const xForwardedFor = req.headers['x-forwarded-for'] as string;
+    if (xForwardedFor) {
+      ip = xForwardedFor.split(',')[0]?.trim();
+    }
+
+    // 2. Try req.ip (Express built-in, works with trust proxy)
+    if (!ip || ip === 'unknown') {
+      ip = req.ip;
+    }
+
+    // 3. Fallback to other headers and connection info
+    if (!ip || ip === 'unknown') {
+      ip = req.headers['x-real-ip'] as string ||
+           req.headers['cf-connecting-ip'] as string || // Cloudflare
+           req.headers['x-client-ip'] as string ||
+           req.connection?.remoteAddress ||
+           req.socket?.remoteAddress;
+    }
+
+    // 4. Normalize IPv6-embedded IPv4 addresses
+    if (ip && ip.startsWith('::ffff:')) {
+      ip = ip.substring(7); // Remove IPv6-to-IPv4 mapping prefix
+    }
+
+    // 5. Return canonical form or 'unknown'
+    return ip && ip !== '::1' && ip !== 'unknown' ? ip : 'unknown';
+  };
+
+  // User IP endpoint for subscription tracking
+  app.get("/api/user-ip", (req, res) => {
+    try {
+      const ip = extractUserIP(req);
+
+      res.json({ 
+        ip: ip,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error('Error getting user IP:', error);
+      res.status(500).json({ message: "Failed to get user IP" });
+    }
   });
 
   // Settings routes
@@ -762,6 +810,87 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log("File downloaded successfully");
       }
     });
+  });
+
+  // Activation Token routes for server-side validation
+  app.post("/api/activation/validate", async (req, res) => {
+    try {
+      const activationRequest: ActivationRequest = req.body;
+      const { code } = activationRequest;
+      
+      if (!code) {
+        return res.status(400).json({ 
+          success: false, 
+          message: "Activation code is required" 
+        } as ActivationResponse);
+      }
+
+      // Extract IP for validation
+      const userIP = extractUserIP(req);
+      
+      // Validate and use the token
+      const { success, activationToken } = await storage.validateAndUseToken(code.toUpperCase(), userIP);
+      
+      if (success && activationToken) {
+        // Log activity
+        await storage.createActivityLog({
+          type: 'subscription_activated',
+          description: `Subscription activated with token ${code} from IP ${userIP}`,
+          metadata: { ip: userIP, tokenId: activationToken.id },
+        });
+
+        return res.json({
+          success: true,
+          message: "Activation successful! Your subscription is now active.",
+          activatedAt: activationToken.usedAt?.getTime()
+        } as ActivationResponse);
+      } else {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid, expired, or already used activation code"
+        } as ActivationResponse);
+      }
+    } catch (error) {
+      console.error('Activation validation error:', error);
+      res.status(500).json({
+        success: false,
+        message: "Server error during activation validation"
+      } as ActivationResponse);
+    }
+  });
+
+  // Generate activation token endpoint (for development/admin use)
+  app.post("/api/activation/generate", async (req, res) => {
+    try {
+      // This is a development/admin endpoint - in production you'd want proper authentication
+      const code = storage.generateActivationCode();
+      
+      // Set expiration to 30 days from now
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 30);
+      
+      const activationToken = await storage.createActivationToken({
+        token: code,
+        expiresAt,
+        metadata: { generatedFor: 'development' }
+      });
+
+      // Log activity
+      await storage.createActivityLog({
+        type: 'activation_token_generated',
+        description: `Activation token ${code} generated`,
+        metadata: { tokenId: activationToken.id },
+      });
+
+      res.json({
+        token: code,
+        expiresAt: expiresAt.toISOString(),
+        message: "Activation token generated successfully"
+      });
+    } catch (error) {
+      console.error('Token generation error:', error);
+      res.status(500).json({ message: "Failed to generate activation token" });
+    }
   });
 
   const httpServer = createServer(app);
