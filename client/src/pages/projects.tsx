@@ -243,7 +243,7 @@ export default function Projects() {
               </Button>
               <Button
                 onClick={handleCreateProject}
-                disabled={createProjectMutation.isPending}
+                disabled={createProjectMutation.isPending || subscriptionTracker.isSubscriptionRequired}
                 data-testid="button-save-project"
               >
                 {createProjectMutation.isPending ? "Creating..." : "Create Project"}
@@ -312,7 +312,12 @@ export default function Projects() {
                       {project.status}
                     </Badge>
                   </div>
-                  <Button variant="ghost" size="sm" data-testid={`button-settings-${project.id}`}>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    disabled={subscriptionTracker.isSubscriptionRequired}
+                    data-testid={`button-settings-${project.id}`}
+                  >
                     <SettingsIcon className="h-4 w-4" />
                   </Button>
                 </div>
@@ -344,11 +349,21 @@ export default function Projects() {
                   <Separator />
                   
                   <div className="flex justify-between">
-                    <Button variant="outline" size="sm" data-testid={`button-chat-${project.id}`}>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      disabled={subscriptionTracker.isSubscriptionRequired}
+                      data-testid={`button-chat-${project.id}`}
+                    >
                       <MessageSquare className="h-4 w-4 mr-2" />
                       Chat with AI
                     </Button>
-                    <Button variant="outline" size="sm" data-testid={`button-view-${project.id}`}>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      disabled={subscriptionTracker.isSubscriptionRequired}
+                      data-testid={`button-view-${project.id}`}
+                    >
                       View Details
                     </Button>
                   </div>

@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Calendar, Clock, Plus, Edit, Trash2, Send } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useSubscriptionTracker } from "@/hooks/useSubscriptionTracker";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { format } from "date-fns";
@@ -20,6 +21,7 @@ import type { ScheduledPost, ChannelPair } from "@shared/schema";
 export default function Scheduler() {
   const { t } = useLanguage();
   const { toast } = useToast();
+  const subscriptionTracker = useSubscriptionTracker();
   const queryClient = useQueryClient();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedChannelPair, setSelectedChannelPair] = useState<string>("");
@@ -142,7 +144,11 @@ export default function Scheduler() {
             </div>
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
               <DialogTrigger asChild>
-                <Button className="flex items-center gap-2" data-testid="button-create-post">
+                <Button 
+                  className="flex items-center gap-2" 
+                  disabled={subscriptionTracker.isSubscriptionRequired}
+                  data-testid="button-create-post"
+                >
                   <Plus className="h-4 w-4" />
                   Создать пост
                 </Button>
@@ -235,7 +241,7 @@ export default function Scheduler() {
                   <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
                     Отмена
                   </Button>
-                  <Button onClick={handleCreatePost} disabled={createPostMutation.isPending} data-testid="button-schedule">
+                  <Button onClick={handleCreatePost} disabled={createPostMutation.isPending || subscriptionTracker.isSubscriptionRequired} data-testid="button-schedule">
                     {createPostMutation.isPending ? "Планирование..." : "Запланировать"}
                   </Button>
                 </div>
@@ -314,7 +320,7 @@ export default function Scheduler() {
                                 variant="outline"
                                 size="sm"
                                 onClick={() => deletePostMutation.mutate(post.id)}
-                                disabled={deletePostMutation.isPending}
+                                disabled={deletePostMutation.isPending || subscriptionTracker.isSubscriptionRequired}
                                 data-testid={`button-delete-${post.id}`}
                               >
                                 <Trash2 className="h-4 w-4" />

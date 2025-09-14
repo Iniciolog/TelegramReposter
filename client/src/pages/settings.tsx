@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useToast } from "@/hooks/use-toast";
+import { useSubscriptionTracker } from "@/hooks/useSubscriptionTracker";
 import { apiRequest } from "@/lib/queryClient";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -25,6 +26,7 @@ type FormData = z.infer<typeof formSchema>;
 export default function Settings() {
   const { t } = useLanguage();
   const { toast } = useToast();
+  const subscriptionTracker = useSubscriptionTracker();
   const queryClient = useQueryClient();
   const [botStatus, setBotStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
 
@@ -182,7 +184,7 @@ export default function Settings() {
                   <div className="flex justify-end space-x-3">
                     <Button 
                       type="submit" 
-                      disabled={isSubmitting}
+                      disabled={isSubmitting || subscriptionTracker.isSubscriptionRequired}
                       data-testid="button-save-settings"
                     >
                       {isSubmitting ? t('settings.saving') : t('settings.save')}

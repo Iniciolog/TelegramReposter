@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
+import { useSubscriptionTracker } from "@/hooks/useSubscriptionTracker";
 import { Bell, Plus, Key, CreditCard } from "lucide-react";
 import { FaGoogle } from "react-icons/fa";
 
@@ -84,6 +85,7 @@ function UnauthorizedDashboard() {
 export default function Dashboard() {
   const { t } = useLanguage();
   const { checkAuth } = useAuthGuard();
+  const subscriptionTracker = useSubscriptionTracker();
   
   return (
     <div className="flex h-screen bg-background">
@@ -105,6 +107,7 @@ export default function Dashboard() {
                 size="icon" 
                 className="relative"
                 onClick={() => checkAuth()}
+                disabled={subscriptionTracker.isSubscriptionRequired}
                 data-testid="button-notifications"
               >
                 <Bell className="h-4 w-4 lg:h-5 lg:w-5" />
@@ -114,6 +117,7 @@ export default function Dashboard() {
                 size="sm" 
                 className="hidden sm:flex" 
                 onClick={() => checkAuth()}
+                disabled={subscriptionTracker.isSubscriptionRequired}
                 data-testid="button-new-channel-pair"
               >
                 <Plus className="h-4 w-4 mr-2" />
@@ -123,6 +127,7 @@ export default function Dashboard() {
                 size="icon" 
                 className="sm:hidden" 
                 onClick={() => checkAuth()}
+                disabled={subscriptionTracker.isSubscriptionRequired}
                 data-testid="button-new-channel-pair-mobile"
               >
                 <Plus className="h-4 w-4" />
