@@ -462,10 +462,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (!sessionToken) {
         // Create new session if none exists
+        const generatedToken = storage.generateSessionToken();
         const newSession = await storage.createUserSession({
           ip,
+          sessionToken: generatedToken,
           isActivated: true,
-          activationDate: new Date(),
+          activatedAt: new Date(),
           trialStartTime: null,
           totalUsageTime: 0
         });
@@ -474,7 +476,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Update existing session to activated
         await storage.updateUserSessionByToken(sessionToken, {
           isActivated: true,
-          activationDate: new Date(),
+          activatedAt: new Date(),
           trialStartTime: null // Reset trial
         });
       }

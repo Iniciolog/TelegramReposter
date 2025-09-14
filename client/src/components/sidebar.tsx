@@ -33,6 +33,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useSubscriptionTracker } from "@/hooks/useSubscriptionTracker";
 import { Separator } from "@/components/ui/separator";
+import { ActivationForm } from "@/components/ui/activation-form";
 
 const navigation = [
   {
@@ -198,6 +199,10 @@ export function Sidebar({ className }: SidebarProps = {}) {
         </ul>
       </nav>
 
+      {/* Activation Form - Always visible in sidebar */}
+      <div className="p-4">
+        <ActivationForm compact={true} />
+      </div>
 
       {/* Language Switcher */}
       <div className="p-4 border-t border-border">
