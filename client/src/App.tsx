@@ -8,6 +8,7 @@ import { SubscriptionModal } from "@/components/subscription-modal";
 import { Footer } from "@/components/footer";
 import { useSubscriptionTracker } from "@/hooks/useSubscriptionTracker";
 import { useAuthGuard } from "@/hooks/useAuthGuard";
+import { TrialExpiredOverlay } from "@/components/trial-expired-overlay";
 import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/dashboard";
 import Channels from "@/pages/channels";
@@ -47,6 +48,13 @@ function AppWithSubscription() {
     handleAuth,
     timeRemaining
   } = useAuthGuard();
+  
+  const subscriptionTracker = useSubscriptionTracker();
+
+  const handleActivationSuccess = () => {
+    // Refresh subscription data after activation
+    window.location.reload();
+  };
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -59,6 +67,10 @@ function AppWithSubscription() {
         onClose={closeAuthModal}
         onActivate={handleAuth}
         timeRemaining={timeRemaining}
+      />
+      <TrialExpiredOverlay
+        isVisible={!subscriptionTracker.subscriptionStatus.isActivated && !subscriptionTracker.isTrialActive}
+        onActivationSuccess={handleActivationSuccess}
       />
     </div>
   );

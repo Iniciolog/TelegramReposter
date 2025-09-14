@@ -340,7 +340,7 @@ export interface ClientUserSession {
   ip: string;
   startTime: number; // timestamp
   totalUsageTime: number; // in milliseconds
-  isSubscriptionActivated: boolean;
+  isActivated: boolean;
   activatedAt?: number; // timestamp when subscription was activated
   lastSeenTime: number; // timestamp
 }

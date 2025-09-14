@@ -124,7 +124,12 @@ export const SubscriptionTracker = () => {
         <div className="space-y-2">
           {!subscriptionStatus.isActivated && (
             <Button 
-              onClick={activateSubscription} 
+              onClick={() => {
+                const code = prompt("Enter activation code:");
+                if (code) {
+                  activateSubscription(code);
+                }
+              }} 
               className="w-full"
               variant={isSubscriptionRequired ? "default" : "outline"}
               data-testid="button-activate-subscription"
@@ -153,7 +158,7 @@ export const SubscriptionTracker = () => {
               <div>Session Start: {new Date(session.startTime).toLocaleString()}</div>
               <div>Last Seen: {new Date(session.lastSeenTime).toLocaleString()}</div>
               <div>Total Usage: {session.totalUsageTime}ms</div>
-              <div>Is Activated: {session.isSubscriptionActivated.toString()}</div>
+              <div>Is Activated: {session.isActivated.toString()}</div>
               <div>Has Exceeded Trial: {subscriptionStatus.hasExceededTrial.toString()}</div>
             </div>
           </details>

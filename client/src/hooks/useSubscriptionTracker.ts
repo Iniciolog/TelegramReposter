@@ -69,13 +69,8 @@ export const useSubscriptionTracker = () => {
   // Mutation for activation
   const activationMutation = useMutation({
     mutationFn: async (code: string) => {
-      return apiRequest('/api/activation/validate', {
-        method: 'POST',
-        body: JSON.stringify({ code }),
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
+      const response = await apiRequest('POST', '/api/activate', { activationKey: code });
+      return await response.json();
     },
     onSuccess: () => {
       // Refresh session data after successful activation
@@ -173,7 +168,7 @@ export const useSubscriptionTracker = () => {
     ip: sessionData.ip,
     startTime: Date.now(), // Approximation
     totalUsageTime: 0, // Server manages this
-    isSubscriptionActivated: sessionData.isActivated,
+    isActivated: sessionData.isActivated,
     activatedAt: undefined,
     lastSeenTime: Date.now(),
   } : null;

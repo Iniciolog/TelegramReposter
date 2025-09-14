@@ -105,7 +105,7 @@ export class ActivationService {
         description: `User activated with code ${cleanCode} from IP ${ip}`,
         metadata: {
           ip,
-          sessionToken: userSession.sessionToken,
+          sessionToken: userSession.sessionToken.substring(0, 6) + '...',
           activationCode: cleanCode,
           timestamp: new Date().toISOString()
         }
@@ -146,7 +146,7 @@ export class ActivationService {
     if (userSession) {
       console.log('🔍 Session from middleware:', {
         sessionId: userSession.id?.substring(0, 8),
-        sessionToken: userSession.sessionToken?.substring(0, 10),
+        sessionToken: userSession.sessionToken?.substring(0, 6) + '...',
         totalUsageTime: userSession.totalUsageTime,
         source: 'middleware'
       });
@@ -160,7 +160,7 @@ export class ActivationService {
         // Try to get existing session by token
         userSession = await storage.getUserSession(sessionToken);
         console.log('🔍 Session lookup by token:', {
-          sessionToken: sessionToken?.substring(0, 10),
+          sessionToken: sessionToken?.substring(0, 6) + '...',
           found: !!userSession,
           sessionId: userSession?.id?.substring(0, 8),
           totalUsageTime: userSession?.totalUsageTime,
@@ -228,7 +228,7 @@ export class ActivationService {
         return; // Don't track usage for activated users
       }
 
-      const newTotalUsage = session.totalUsageTime + usageTimeMs;
+      const newTotalUsage = (session.totalUsageTime ?? 0) + usageTimeMs;
       
       await storage.updateUserSessionByToken(sessionToken, {
         totalUsageTime: newTotalUsage,
@@ -240,7 +240,7 @@ export class ActivationService {
         await storage.updateUserSessionByToken(sessionToken, {
           isBlocked: false, // Don't block immediately, just track
           metadata: {
-            ...session.metadata,
+            ...(session.metadata || {}),
             trialExceeded: true,
             trialExceededAt: new Date().toISOString()
           }
@@ -270,7 +270,7 @@ export class ActivationService {
           type: 'user_blocked',
           description: `User session blocked: ${reason}`,
           metadata: {
-            sessionToken,
+            sessionToken: sessionToken.substring(0, 6) + '...',
             reason,
             timestamp: new Date().toISOString()
           }
@@ -303,7 +303,7 @@ export class ActivationService {
     
     console.log('🔍 Trial expiration check:', {
       sessionId: session.id?.substring(0, 8),
-      sessionToken: session.sessionToken?.substring(0, 10),
+      sessionToken: session.sessionToken?.substring(0, 6) + '...',
       isActivated: session.isActivated,
       totalUsageTime: session.totalUsageTime,
       TRIAL_DURATION_MS,

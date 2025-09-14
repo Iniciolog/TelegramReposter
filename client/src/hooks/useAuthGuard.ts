@@ -6,7 +6,7 @@ export const useAuthGuard = () => {
   const subscriptionTracker = useSubscriptionTracker();
 
   const checkAuth = (action?: () => void) => {
-    if (!subscriptionTracker.session?.isSubscriptionActivated && !subscriptionTracker.isTrialActive) {
+    if (!subscriptionTracker.subscriptionStatus.isActivated && !subscriptionTracker.isTrialActive) {
       setIsAuthModalOpen(true);
       return false;
     }
@@ -29,7 +29,7 @@ export const useAuthGuard = () => {
     isAuthModalOpen,
     closeAuthModal,
     handleAuth,
-    isAuthenticated: subscriptionTracker.session?.isSubscriptionActivated || subscriptionTracker.isTrialActive,
+    isAuthenticated: subscriptionTracker.subscriptionStatus.isActivated || subscriptionTracker.isTrialActive,
     timeRemaining: subscriptionTracker.getFormattedTimeRemaining()
   };
 };
