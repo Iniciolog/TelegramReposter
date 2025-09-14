@@ -13,7 +13,6 @@ import { Badge } from "@/components/ui/badge";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { useSubscriptionTracker } from "@/hooks/useSubscriptionTracker";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -27,7 +26,6 @@ interface CreateWebSourceFormData extends InsertWebSource {}
 export default function WebSources() {
   const { t } = useLanguage();
   const { toast } = useToast();
-  const subscriptionTracker = useSubscriptionTracker();
   const queryClient = useQueryClient();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [editingWebSource, setEditingWebSource] = useState<WebSource | null>(null);
@@ -185,12 +183,7 @@ export default function WebSources() {
             
             <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
               <DialogTrigger asChild>
-                <Button 
-                  size="sm" 
-                  className="hidden sm:flex" 
-                  disabled={subscriptionTracker.isSubscriptionRequired}
-                  data-testid="button-add-web-source"
-                >
+                <Button size="sm" className="hidden sm:flex" data-testid="button-add-web-source">
                   <Plus className="h-4 w-4 mr-2" />
                   Add Web Source
                 </Button>
@@ -327,7 +320,7 @@ export default function WebSources() {
                       </Button>
                       <Button 
                         type="submit" 
-                        disabled={createWebSourceMutation.isPending || subscriptionTracker.isSubscriptionRequired}
+                        disabled={createWebSourceMutation.isPending}
                         data-testid="button-save-web-source"
                       >
                         {createWebSourceMutation.isPending ? 'Creating...' : 'Create Web Source'}
@@ -366,11 +359,7 @@ export default function WebSources() {
                 <p className="text-muted-foreground text-center mb-4">
                   Get started by adding your first RSS feed or HTML parsing source
                 </p>
-                <Button 
-                  onClick={() => setIsCreateDialogOpen(true)} 
-                  disabled={subscriptionTracker.isSubscriptionRequired}
-                  data-testid="button-create-first-web-source"
-                >
+                <Button onClick={() => setIsCreateDialogOpen(true)} data-testid="button-create-first-web-source">
                   <Plus className="h-4 w-4 mr-2" />
                   Add Your First Web Source
                 </Button>
@@ -404,7 +393,7 @@ export default function WebSources() {
                           size="sm"
                           variant="ghost"
                           onClick={() => handleParse(webSource.id)}
-                          disabled={parseWebSourceMutation.isPending || subscriptionTracker.isSubscriptionRequired}
+                          disabled={parseWebSourceMutation.isPending}
                           data-testid={`button-parse-web-source-${webSource.id}`}
                         >
                           <Play className="h-4 w-4" />
@@ -414,7 +403,6 @@ export default function WebSources() {
                           size="sm"
                           variant="ghost"
                           onClick={() => handleEdit(webSource)}
-                          disabled={subscriptionTracker.isSubscriptionRequired}
                           data-testid={`button-edit-web-source-${webSource.id}`}
                         >
                           <Settings className="h-4 w-4" />
@@ -425,7 +413,6 @@ export default function WebSources() {
                             <Button 
                               size="sm" 
                               variant="ghost"
-                              disabled={subscriptionTracker.isSubscriptionRequired}
                               data-testid={`button-delete-web-source-${webSource.id}`}
                             >
                               <Trash2 className="h-4 w-4" />
@@ -442,7 +429,6 @@ export default function WebSources() {
                               <AlertDialogCancel>Cancel</AlertDialogCancel>
                               <AlertDialogAction 
                                 onClick={() => handleDelete(webSource.id)}
-                                disabled={subscriptionTracker.isSubscriptionRequired}
                                 className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                               >
                                 Delete
@@ -623,7 +609,7 @@ export default function WebSources() {
                       </Button>
                       <Button 
                         type="submit" 
-                        disabled={updateWebSourceMutation.isPending || subscriptionTracker.isSubscriptionRequired}
+                        disabled={updateWebSourceMutation.isPending}
                         data-testid="button-save-edit-web-source"
                       >
                         {updateWebSourceMutation.isPending ? 'Saving...' : 'Save Changes'}
@@ -642,7 +628,6 @@ export default function WebSources() {
         size="icon"
         className="sm:hidden fixed bottom-6 right-6 h-14 w-14 rounded-full shadow-lg z-40"
         onClick={() => setIsCreateDialogOpen(true)}
-        disabled={subscriptionTracker.isSubscriptionRequired}
         data-testid="button-add-web-source-mobile"
       >
         <Plus className="h-6 w-6" />

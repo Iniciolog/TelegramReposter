@@ -22,7 +22,6 @@ import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { useSubscriptionTracker } from "@/hooks/useSubscriptionTracker";
 import { apiRequest } from "@/lib/queryClient";
 import { formatDistanceToNow } from "date-fns";
 import { ru } from "date-fns/locale";
@@ -32,7 +31,6 @@ import { useParsingStatus } from "@/hooks/useParsingStatus";
 
 export default function DraftsPage() {
   const { toast } = useToast();
-  const subscriptionTracker = useSubscriptionTracker();
   const queryClient = useQueryClient();
   const [selectedChannelPair, setSelectedChannelPair] = useState<string>("all");
   const [editingDraft, setEditingDraft] = useState<DraftPost | null>(null);
@@ -282,7 +280,7 @@ export default function DraftsPage() {
                   <Button 
                     variant="destructive" 
                     size="sm"
-                    disabled={bulkDeleteMutation.isPending || subscriptionTracker.isSubscriptionRequired}
+                    disabled={bulkDeleteMutation.isPending}
                     data-testid="button-bulk-delete"
                     className="w-full sm:w-auto"
                   >
@@ -302,7 +300,6 @@ export default function DraftsPage() {
                     <AlertDialogCancel>Отмена</AlertDialogCancel>
                     <AlertDialogAction 
                       onClick={handleBulkDelete}
-                      disabled={subscriptionTracker.isSubscriptionRequired}
                       className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                     >
                       Удалить
@@ -404,13 +401,7 @@ export default function DraftsPage() {
                 <div className="flex items-center justify-end gap-2 pt-2 border-t">
                   <Dialog>
                     <DialogTrigger asChild>
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        onClick={() => handleEdit(draft)} 
-                        disabled={subscriptionTracker.isSubscriptionRequired}
-                        data-testid={`button-edit-${draft.id}`}
-                      >
+                      <Button variant="outline" size="sm" onClick={() => handleEdit(draft)} data-testid={`button-edit-${draft.id}`}>
                         <Edit className="h-4 w-4 mr-1" />
                         Редактировать
                       </Button>
@@ -437,7 +428,7 @@ export default function DraftsPage() {
                           </Button>
                           <Button 
                             onClick={handleSave} 
-                            disabled={updateDraftMutation.isPending || subscriptionTracker.isSubscriptionRequired}
+                            disabled={updateDraftMutation.isPending}
                             data-testid="button-save-draft"
                           >
                             {updateDraftMutation.isPending ? "Сохранение..." : "Сохранить"}
@@ -449,7 +440,7 @@ export default function DraftsPage() {
 
                   <Button 
                     onClick={() => publishDraftMutation.mutate(draft.id)}
-                    disabled={publishDraftMutation.isPending || subscriptionTracker.isSubscriptionRequired}
+                    disabled={publishDraftMutation.isPending}
                     size="sm"
                     data-testid={`button-publish-${draft.id}`}
                   >
@@ -459,12 +450,7 @@ export default function DraftsPage() {
 
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
-                      <Button 
-                        variant="destructive" 
-                        size="sm" 
-                        disabled={subscriptionTracker.isSubscriptionRequired}
-                        data-testid={`button-delete-${draft.id}`}
-                      >
+                      <Button variant="destructive" size="sm" data-testid={`button-delete-${draft.id}`}>
                         <Trash2 className="h-4 w-4 mr-1" />
                         Удалить
                       </Button>

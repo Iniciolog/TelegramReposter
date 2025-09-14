@@ -4,7 +4,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useToast } from "@/hooks/use-toast";
-import { useSubscriptionTracker } from "@/hooks/useSubscriptionTracker";
 import { apiRequest } from "@/lib/queryClient";
 import { 
   ArrowRight, 
@@ -40,7 +39,6 @@ export function ChannelPairs() {
   });
   const { t } = useLanguage();
   const { toast } = useToast();
-  const subscriptionTracker = useSubscriptionTracker();
   const queryClient = useQueryClient();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [pairToDelete, setPairToDelete] = useState<any>(null);
@@ -302,7 +300,7 @@ export function ChannelPairs() {
                             variant="ghost"
                             size="sm"
                             onClick={() => handleChangeCopyMode(pair)}
-                            disabled={changeCopyModeMutation.isPending || subscriptionTracker.isSubscriptionRequired}
+                            disabled={changeCopyModeMutation.isPending}
                             data-testid={`button-copymode-${pair.id}`}
                             className="h-8 px-2"
                           >
@@ -322,7 +320,7 @@ export function ChannelPairs() {
                     <Switch
                       checked={pair.autoTranslate || false}
                       onCheckedChange={() => handleToggleAutoTranslate(pair)}
-                      disabled={toggleAutoTranslateMutation.isPending || subscriptionTracker.isSubscriptionRequired}
+                      disabled={toggleAutoTranslateMutation.isPending}
                       data-testid={`switch-autotranslate-${pair.id}`}
                     />
                     <span className="text-xs text-muted-foreground">
@@ -340,16 +338,13 @@ export function ChannelPairs() {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent>
-                      <DropdownMenuItem 
-                        data-testid={`menu-edit-${pair.id}`}
-                        disabled={subscriptionTracker.isSubscriptionRequired}
-                      >
+                      <DropdownMenuItem data-testid={`menu-edit-${pair.id}`}>
                         {t('channel-pairs.edit')}
                       </DropdownMenuItem>
                       <DropdownMenuItem 
                         data-testid={`menu-pause-${pair.id}`}
                         onClick={() => handleToggleStatus(pair)}
-                        disabled={toggleStatusMutation.isPending || subscriptionTracker.isSubscriptionRequired}
+                        disabled={toggleStatusMutation.isPending}
                       >
                         {pair.status === "active" ? t('channel-pairs.pause') : t('channel-pairs.resume')}
                       </DropdownMenuItem>
@@ -357,7 +352,7 @@ export function ChannelPairs() {
                         className="text-destructive"
                         data-testid={`menu-delete-${pair.id}`}
                         onClick={() => handleDeleteClick(pair)}
-                        disabled={deleteMutation.isPending || subscriptionTracker.isSubscriptionRequired}
+                        disabled={deleteMutation.isPending}
                       >
                         {t('channel-pairs.delete')}
                       </DropdownMenuItem>
@@ -385,7 +380,7 @@ export function ChannelPairs() {
             <AlertDialogCancel>Отмена</AlertDialogCancel>
             <AlertDialogAction 
               onClick={handleConfirmDelete}
-              disabled={deleteMutation.isPending || subscriptionTracker.isSubscriptionRequired}
+              disabled={deleteMutation.isPending}
               className="bg-destructive hover:bg-destructive/90"
             >
               {deleteMutation.isPending ? "Удаляем..." : "Удалить"}
