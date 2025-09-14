@@ -432,6 +432,75 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Subscription activation endpoint
+  app.post("/api/activate", async (req: AuthenticatedRequest, res) => {
+    try {
+      const { activationKey } = req.body;
+
+      if (!activationKey || typeof activationKey !== 'string') {
+        return res.status(400).json({
+          success: false,
+          message: "Ключ активации обязателен"
+        });
+      }
+
+      // Secret activation key
+      const VALID_ACTIVATION_KEY = "1984";
+
+      if (activationKey.trim() !== VALID_ACTIVATION_KEY) {
+        return res.status(400).json({
+          success: false,
+          message: "Неверный ключ активации"
+        });
+      }
+
+      // Get or create user session
+      const ip = extractUserIP(req);
+      let sessionToken = req.cookies?.sessionToken || 
+                        req.headers['x-session-token'] as string ||
+                        req.query.sessionToken as string;
+      
+      if (!sessionToken) {
+        // Create new session if none exists
+        const newSession = await storage.createUserSession({
+          ip,
+          isActivated: true,
+          activationDate: new Date(),
+          trialStartTime: null,
+          totalUsageTime: 0
+        });
+        sessionToken = newSession.sessionToken;
+      } else {
+        // Update existing session to activated
+        await storage.updateUserSessionByToken(sessionToken, {
+          isActivated: true,
+          activationDate: new Date(),
+          trialStartTime: null // Reset trial
+        });
+      }
+
+      // Set cookie
+      res.cookie('sessionToken', sessionToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
+      });
+
+      res.json({
+        success: true,
+        message: "Подписка успешно активирована!",
+        sessionToken
+      });
+    } catch (error) {
+      console.error('Activation error:', error);
+      res.status(500).json({
+        success: false,
+        message: "Ошибка сервера при активации"
+      });
+    }
+  });
+
   // Analytics routes
   app.get("/api/stats", async (req, res) => {
     try {
