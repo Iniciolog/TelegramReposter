@@ -383,6 +383,14 @@ export class WebChannelParserService {
       }
       
       // Handle different copy modes
+      console.log(`🔄 Processing copyMode: '${channelPair.copyMode}' for channel: ${channelPair.sourceName}`);
+      
+      // Skip processing if disabled
+      if (channelPair.copyMode === 'disabled') {
+        console.log(`⏸️ Skipping message ${message.messageId} - copyMode is disabled for ${channelPair.sourceName}`);
+        return;
+      }
+      
       if (channelPair.copyMode === 'draft' || channelPair.copyMode === 'both') {
         // Check if draft already exists to avoid duplicates
         const existingDraft = await storage.getDraftPostByOriginalId(
@@ -401,7 +409,7 @@ export class WebChannelParserService {
             status: 'draft',
           });
 
-          console.log(`📝 Created draft post: ${draftPost.id} ${channelPair.autoTranslate ? '(with translation)' : ''}`);
+          console.log(`📝 Created draft post: ${draftPost.id} for copyMode: '${channelPair.copyMode}' ${channelPair.autoTranslate ? '(with translation)' : ''}`);
           
           // Notify WebSocket clients about new draft
           webSocketService.draftCreated(channelPair.sourceName, content.substring(0, 100));
@@ -409,7 +417,7 @@ export class WebChannelParserService {
           // Log draft creation
           await storage.createActivityLog({
             type: 'web_post_detected',
-            description: `New post web-parsed to drafts from ${channelPair.sourceName}${channelPair.autoTranslate ? ' (translated)' : ''}`,
+            description: `New post web-parsed to drafts from ${channelPair.sourceName} (copyMode: ${channelPair.copyMode})${channelPair.autoTranslate ? ' (translated)' : ''}`,
             channelPairId: channelPair.id,
           });
         } else {
@@ -417,7 +425,7 @@ export class WebChannelParserService {
         }
       }
 
-      if (channelPair.copyMode === 'auto' || channelPair.copyMode === 'both') {
+      if (channelPair.copyMode === 'auto_publish' || channelPair.copyMode === 'both') {
         // Create post record with translated content for auto-posting
         const post = await storage.createPost({
           channelPairId: channelPair.id,

@@ -345,15 +345,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/channel-pairs/:id", async (req, res) => {
     try {
       const { id } = req.params;
-      const updates = req.body;
+      console.log(`📝 PUT /api/channel-pairs/${id} - Request body:`, req.body);
       
-      const channelPair = await storage.updateChannelPair(id, updates);
+      // Validate the updates using partial schema
+      const validatedUpdates = insertChannelPairSchema.partial().parse(req.body);
+      console.log(`✅ Validated updates for channel pair ${id}:`, validatedUpdates);
+      
+      const channelPair = await storage.updateChannelPair(id, validatedUpdates);
       if (!channelPair) {
+        console.log(`❌ Channel pair not found: ${id}`);
         return res.status(404).json({ message: "Channel pair not found" });
+      }
+      
+      console.log(`✅ Updated channel pair ${id}:`, {
+        id: channelPair.id,
+        copyMode: channelPair.copyMode,
+        sourceName: channelPair.sourceName
+      });
+      
+      // Log activity for important updates
+      if (validatedUpdates.copyMode) {
+        await storage.createActivityLog({
+          type: 'channel_pair_updated',
+          description: `Copy mode changed to: ${validatedUpdates.copyMode} for ${channelPair.sourceName}`,
+          channelPairId: channelPair.id,
+        });
+        console.log(`📋 Logged copy mode change: ${validatedUpdates.copyMode}`);
       }
       
       res.json(channelPair);
     } catch (error) {
+      console.error(`❌ Error updating channel pair ${req.params.id}:`, error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Invalid update data", 
+          errors: error.errors 
+        });
+      }
       res.status(400).json({ message: "Failed to update channel pair" });
     }
   });

@@ -11,7 +11,9 @@ import {
   Play, 
   Pause,
   Circle,
-  Languages
+  Languages,
+  FileText,
+  Settings
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -107,6 +109,33 @@ export function ChannelPairs() {
       });
     },
   });
+
+  // Copy mode mutation
+  const changeCopyModeMutation = useMutation({
+    mutationFn: async ({ pairId, copyMode }: { pairId: string; copyMode: string }) => {
+      await apiRequest("PUT", `/api/channel-pairs/${pairId}`, { copyMode });
+    },
+    onSuccess: (_, { copyMode }) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/channel-pairs"] });
+      const modeNames: Record<string, string> = {
+        auto_publish: "Автопубликация",
+        draft: "Только черновики", 
+        both: "Черновики + Автопубликация",
+        disabled: "Отключено"
+      };
+      toast({
+        title: "Режим копирования изменен",
+        description: `Установлен режим: ${modeNames[copyMode] || copyMode}`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        variant: "destructive",
+        title: "Ошибка смены режима копирования",
+        description: error.message || "Не удалось изменить режим копирования",
+      });
+    },
+  });
   
   const handleDeleteClick = (pair: any) => {
     setPairToDelete(pair);
@@ -127,6 +156,14 @@ export function ChannelPairs() {
   const handleToggleAutoTranslate = (pair: any) => {
     const newAutoTranslate = !pair.autoTranslate;
     toggleAutoTranslateMutation.mutate({ pairId: pair.id, autoTranslate: newAutoTranslate });
+  };
+
+  const handleChangeCopyMode = (pair: any) => {
+    const modeOptions = ["auto_publish", "draft", "both", "disabled"];
+    const currentIndex = modeOptions.indexOf(pair.copyMode || "auto_publish");
+    const nextIndex = (currentIndex + 1) % modeOptions.length;
+    const newCopyMode = modeOptions[nextIndex];
+    changeCopyModeMutation.mutate({ pairId: pair.id, copyMode: newCopyMode });
   };
 
   if (isLoading) {
@@ -180,6 +217,19 @@ export function ChannelPairs() {
         return "bg-red-500";
       default:
         return "bg-gray-500";
+    }
+  };
+
+  const getCopyModeInfo = (copyMode: string) => {
+    switch (copyMode) {
+      case "draft":
+        return { icon: FileText, text: "Черновики", color: "text-blue-500" };
+      case "both":
+        return { icon: Settings, text: "Все", color: "text-purple-500" };
+      case "disabled":
+        return { icon: Circle, text: "Выкл", color: "text-gray-500" };
+      default: // auto_publish
+        return { icon: ArrowRight, text: "Авто", color: "text-green-500" };
     }
   };
 
@@ -239,6 +289,31 @@ export function ChannelPairs() {
                     </span>
                   </div>
                   
+                  {/* Copy mode selector */}
+                  <div className="flex items-center space-x-2">
+                    {(() => {
+                      const modeInfo = getCopyModeInfo(pair.copyMode || "auto_publish");
+                      const Icon = modeInfo.icon;
+                      return (
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleChangeCopyMode(pair)}
+                            disabled={changeCopyModeMutation.isPending}
+                            data-testid={`button-copymode-${pair.id}`}
+                            className="h-8 px-2"
+                          >
+                            <Icon className={`h-3 w-3 ${modeInfo.color}`} />
+                            <span className={`text-xs ml-1 ${modeInfo.color}`}>
+                              {modeInfo.text}
+                            </span>
+                          </Button>
+                        </>
+                      );
+                    })()}
+                  </div>
+
                   {/* Auto-translate toggle */}
                   <div className="flex items-center space-x-2">
                     <Languages className="h-4 w-4 text-muted-foreground" />
