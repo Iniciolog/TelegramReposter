@@ -68,14 +68,10 @@ export const useSubscriptionTracker = () => {
 
   // Mutation for activation
   const activationMutation = useMutation({
-    mutationFn: async (code: string) => {
-      return apiRequest('/api/activation/validate', {
-        method: 'POST',
-        body: JSON.stringify({ code }),
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
+    mutationFn: async (code: string): Promise<ActivationResponse> => {
+      const response = await apiRequest('POST', '/api/activation/validate', { code });
+      const result = await response.json() as ActivationResponse;
+      return result;
     },
     onSuccess: () => {
       // Refresh session data after successful activation

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Plus, Bot, Calendar, Clock, MessageSquare, Settings as SettingsIcon } from "lucide-react";
+import { Plus, Bot, Calendar, Clock, MessageSquare, Settings as SettingsIcon, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -11,7 +11,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
+import { useSubscriptionTracker } from "@/hooks/useSubscriptionTracker";
+import { SubscriptionModal } from "@/components/subscription-modal";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Project, InsertProject } from "@shared/schema";
 
@@ -24,6 +27,7 @@ interface ProjectWithStats extends Project {
 
 export default function Projects() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isSubscriptionModalOpen, setIsSubscriptionModalOpen] = useState(false);
   const [newProject, setNewProject] = useState<Partial<InsertProject>>({
     name: "",
     description: "",
@@ -34,14 +38,30 @@ export default function Projects() {
     settings: {}
   });
   const { toast } = useToast();
+  const subscriptionTracker = useSubscriptionTracker();
 
   const { data: projects = [], isLoading } = useQuery<ProjectWithStats[]>({
     queryKey: ["/api/projects"],
   });
 
   const createProjectMutation = useMutation({
-    mutationFn: (project: InsertProject) => 
-      apiRequest("POST", "/api/projects", project),
+    mutationFn: async (project: InsertProject) => {
+      const response = await apiRequest("POST", "/api/projects", project);
+      
+      // Check if response is not ok and parse error
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+        
+        // Handle specific error codes
+        if (response.status === 402 && (errorData.code === 'TRIAL_EXPIRED' || errorData.code === 'ACTIVATION_REQUIRED')) {
+          throw new Error(`SUBSCRIPTION_REQUIRED:${errorData.message}`);
+        }
+        
+        throw new Error(errorData.message || 'Failed to create project');
+      }
+      
+      return response;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
       setIsCreateModalOpen(false);
@@ -59,8 +79,20 @@ export default function Projects() {
         description: "Your long-term project has been created successfully.",
       });
     },
-    onError: (error) => {
+    onError: (error: Error) => {
       console.error("Failed to create project:", error);
+      
+      // Handle subscription required error
+      if (error.message.startsWith('SUBSCRIPTION_REQUIRED:')) {
+        setIsSubscriptionModalOpen(true);
+        toast({
+          title: "Активация требуется",
+          description: "Пробный период истек. Активируйте подписку для создания проектов.",
+          variant: "destructive",
+        });
+        return;
+      }
+      
       toast({
         title: "Error",
         description: "Failed to create project. Please try again.",
@@ -70,6 +102,17 @@ export default function Projects() {
   });
 
   const handleCreateProject = () => {
+    // Check subscription status first
+    if (subscriptionTracker.isSubscriptionRequired) {
+      setIsSubscriptionModalOpen(true);
+      toast({
+        title: "Активация требуется",
+        description: "Пробный период истек. Активируйте подписку для создания проектов.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (!newProject.name?.trim()) {
       toast({
         title: "Validation Error",
@@ -83,6 +126,16 @@ export default function Projects() {
       ...newProject,
       name: newProject.name!,
     } as InsertProject);
+  };
+
+  const handleSubscriptionActivated = () => {
+    setIsSubscriptionModalOpen(false);
+    // Refresh subscription data
+    subscriptionTracker.resetSession();
+    toast({
+      title: "Подписка активирована",
+      description: "Теперь вы можете создавать проекты.",
+    });
   };
 
   const getStatusColor = (status: string) => {
@@ -126,7 +179,10 @@ export default function Projects() {
         </div>
         <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
           <DialogTrigger asChild>
-            <Button data-testid="button-create-project">
+            <Button 
+              disabled={subscriptionTracker.isSubscriptionRequired}
+              data-testid="button-create-project"
+            >
               <Plus className="h-4 w-4 mr-2" />
               Create Project
             </Button>
@@ -197,6 +253,28 @@ export default function Projects() {
         </Dialog>
       </div>
 
+      {/* Subscription status warning */}
+      {subscriptionTracker.isSubscriptionRequired && (
+        <Alert className="mb-6 border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-950">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>
+            <div className="flex justify-between items-center">
+              <div>
+                <strong>Пробный период истек.</strong> Активируйте подписку для создания новых проектов.
+              </div>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => setIsSubscriptionModalOpen(true)}
+                data-testid="button-activate-subscription"
+              >
+                Активировать
+              </Button>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
+
       {projects.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
@@ -205,10 +283,19 @@ export default function Projects() {
             <p className="text-muted-foreground text-center mb-4">
               Create your first long-term project to get started with AI-powered content management
             </p>
-            <Button onClick={() => setIsCreateModalOpen(true)} data-testid="button-create-first-project">
+            <Button 
+              onClick={() => setIsCreateModalOpen(true)} 
+              disabled={subscriptionTracker.isSubscriptionRequired}
+              data-testid="button-create-first-project"
+            >
               <Plus className="h-4 w-4 mr-2" />
               Create Your First Project
             </Button>
+            {subscriptionTracker.isSubscriptionRequired && (
+              <p className="text-sm text-muted-foreground mt-2">
+                Требуется активация подписки
+              </p>
+            )}
           </CardContent>
         </Card>
       ) : (
@@ -271,6 +358,14 @@ export default function Projects() {
           ))}
         </div>
       )}
+
+      {/* Subscription Modal */}
+      <SubscriptionModal
+        isOpen={isSubscriptionModalOpen}
+        onClose={() => setIsSubscriptionModalOpen(false)}
+        onActivate={handleSubscriptionActivated}
+        timeRemaining={subscriptionTracker.getFormattedTimeRemaining()}
+      />
     </div>
   );
 }
