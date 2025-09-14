@@ -146,6 +146,64 @@ export const userSessions = pgTable("user_sessions", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Long-term content projects
+export const projects = pgTable("projects", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  description: text("description"),
+  status: text("status").notNull().default("active"), // active, paused, completed, archived
+  objectives: jsonb("objectives").default([]), // Array of project goals
+  targetChannels: jsonb("target_channels").default([]), // Array of channel IDs
+  timeline: jsonb("timeline").default({}), // Start/end dates, milestones
+  settings: jsonb("settings").default({}), // Project-specific settings
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// AI agents for project management
+export const projectAgents = pgTable("project_agents", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").references(() => projects.id).notNull(),
+  name: text("name").notNull(),
+  role: text("role").notNull().default("content_manager"), // content_manager, scheduler, analyst
+  personality: text("personality"), // Agent personality description
+  instructions: text("instructions"), // Agent system prompt/instructions
+  isActive: boolean("is_active").default(true),
+  lastActiveAt: timestamp("last_active_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Agent conversation history
+export const agentConversations = pgTable("agent_conversations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  agentId: varchar("agent_id").references(() => projectAgents.id).notNull(),
+  role: text("role").notNull(), // user, agent
+  content: text("content").notNull(),
+  metadata: jsonb("metadata").default({}), // Actions taken, tool calls, etc.
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Project posts (scheduled content)
+export const projectPosts = pgTable("project_posts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").references(() => projects.id).notNull(),
+  agentId: varchar("agent_id").references(() => projectAgents.id),
+  title: text("title").notNull(),
+  content: text("content").notNull(),
+  mediaUrls: jsonb("media_urls").default([]),
+  targetChannelIds: jsonb("target_channel_ids").default([]), // Channels to post to
+  scheduledAt: timestamp("scheduled_at").notNull(),
+  status: text("status").notNull().default("planned"), // planned, generated, scheduled, published, failed
+  postType: text("post_type").notNull().default("original"), // original, repost, curated
+  sourceUrl: text("source_url"), // For reposts/curated content
+  publishedPostIds: jsonb("published_post_ids").default([]), // IDs of actual published posts
+  publishedAt: timestamp("published_at"),
+  errorMessage: text("error_message"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Insert schemas
 export const insertChannelPairSchema = createInsertSchema(channelPairs).omit({
   id: true,
@@ -209,6 +267,31 @@ export const insertUserSessionSchema = createInsertSchema(userSessions).omit({
   updatedAt: true,
 });
 
+export const insertProjectSchema = createInsertSchema(projects).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertProjectAgentSchema = createInsertSchema(projectAgents).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  lastActiveAt: true,
+});
+
+export const insertAgentConversationSchema = createInsertSchema(agentConversations).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertProjectPostSchema = createInsertSchema(projectPosts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  publishedAt: true,
+});
+
 // Types
 export type ChannelPair = typeof channelPairs.$inferSelect;
 export type InsertChannelPair = z.infer<typeof insertChannelPairSchema>;
@@ -239,6 +322,18 @@ export type InsertRateLimitAttempt = z.infer<typeof insertRateLimitAttemptSchema
 
 export type UserSession = typeof userSessions.$inferSelect;
 export type InsertUserSession = z.infer<typeof insertUserSessionSchema>;
+
+export type Project = typeof projects.$inferSelect;
+export type InsertProject = z.infer<typeof insertProjectSchema>;
+
+export type ProjectAgent = typeof projectAgents.$inferSelect;
+export type InsertProjectAgent = z.infer<typeof insertProjectAgentSchema>;
+
+export type AgentConversation = typeof agentConversations.$inferSelect;
+export type InsertAgentConversation = z.infer<typeof insertAgentConversationSchema>;
+
+export type ProjectPost = typeof projectPosts.$inferSelect;
+export type InsertProjectPost = z.infer<typeof insertProjectPostSchema>;
 
 // Subscription tracking types (client-side only)
 export interface ClientUserSession {
