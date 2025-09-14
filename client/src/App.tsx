@@ -16,6 +16,7 @@ import Branding from "@/pages/branding";
 import Scheduler from "@/pages/scheduler";
 import Drafts from "@/pages/drafts";
 import WebSources from "@/pages/web-sources";
+import Projects from "@/pages/projects";
 import Analytics from "@/pages/analytics";
 import ActivityLogs from "@/pages/activity-logs";
 import Settings from "@/pages/settings";
@@ -30,6 +31,7 @@ function Router() {
       <Route path="/scheduler" component={Scheduler} />
       <Route path="/drafts" component={Drafts} />
       <Route path="/web-sources" component={WebSources} />
+      <Route path="/projects" component={Projects} />
       <Route path="/analytics" component={Analytics} />
       <Route path="/activity-logs" component={ActivityLogs} />
       <Route path="/settings" component={Settings} />

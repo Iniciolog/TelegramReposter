@@ -12,7 +12,7 @@ import { translationService } from "./services/translationService";
 import { activationService } from "./services/activationService";
 import { activationRateLimiter, apiRateLimiter, extractUserIP } from "./middleware/rateLimiting";
 import { requireActivation, checkActivationSoft, requireActivationForPremium, type AuthenticatedRequest } from "./middleware/activationAuth";
-import { insertChannelPairSchema, insertSettingsSchema, insertScheduledPostSchema, insertDraftPostSchema, insertWebSourceSchema, type ActivationRequest, type ActivationResponse } from "@shared/schema";
+import { insertChannelPairSchema, insertSettingsSchema, insertScheduledPostSchema, insertDraftPostSchema, insertWebSourceSchema, insertProjectSchema, insertProjectAgentSchema, insertAgentConversationSchema, insertProjectPostSchema, type ActivationRequest, type ActivationResponse } from "@shared/schema";
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -628,6 +628,374 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Error deleting scheduled post:', error);
       res.status(500).json({ message: "Failed to delete scheduled post" });
+    }
+  });
+
+  // Projects endpoints
+  app.get("/api/projects", checkActivationSoft, async (req, res) => {
+    try {
+      const projects = await storage.getProjects();
+      res.json(projects);
+    } catch (error) {
+      console.error('Error getting projects:', error);
+      res.status(500).json({ message: "Failed to get projects" });
+    }
+  });
+
+  app.get("/api/projects/:id", checkActivationSoft, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const project = await storage.getProject(id);
+      
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+      
+      res.json(project);
+    } catch (error) {
+      console.error('Error getting project:', error);
+      res.status(500).json({ message: "Failed to get project" });
+    }
+  });
+
+  app.post("/api/projects", requireActivation, apiRateLimiter, async (req, res) => {
+    try {
+      const validatedProject = insertProjectSchema.parse(req.body);
+      const project = await storage.createProject(validatedProject);
+      
+      // Log activity
+      await storage.createActivityLog({
+        type: 'project_created',
+        description: `Long-term project created: ${project.name}`,
+        metadata: { projectId: project.id }
+      });
+      
+      res.status(201).json(project);
+    } catch (error) {
+      console.error('Error creating project:', error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Validation error", 
+          errors: error.errors 
+        });
+      }
+      res.status(500).json({ message: "Failed to create project" });
+    }
+  });
+
+  app.put("/api/projects/:id", requireActivation, apiRateLimiter, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const updates = insertProjectSchema.partial().parse(req.body);
+      
+      const project = await storage.updateProject(id, updates);
+      
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+      
+      // Log activity
+      await storage.createActivityLog({
+        type: 'project_updated',
+        description: `Project updated: ${project.name}`,
+        metadata: { projectId: project.id }
+      });
+      
+      res.json(project);
+    } catch (error) {
+      console.error('Error updating project:', error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Validation error", 
+          errors: error.errors 
+        });
+      }
+      res.status(500).json({ message: "Failed to update project" });
+    }
+  });
+
+  app.delete("/api/projects/:id", requireActivation, apiRateLimiter, async (req, res) => {
+    try {
+      const { id } = req.params;
+      
+      // Get project info before deletion for logging
+      const project = await storage.getProject(id);
+      
+      const deleted = await storage.deleteProject(id);
+      
+      if (!deleted) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+      
+      // Log activity
+      if (project) {
+        await storage.createActivityLog({
+          type: 'project_deleted',
+          description: `Project deleted: ${project.name}`,
+          metadata: { projectId: project.id }
+        });
+      }
+      
+      res.json({ message: "Project deleted successfully" });
+    } catch (error) {
+      console.error('Error deleting project:', error);
+      res.status(500).json({ message: "Failed to delete project" });
+    }
+  });
+
+  // Project Agents endpoints
+  app.get("/api/projects/:projectId/agents", checkActivationSoft, async (req, res) => {
+    try {
+      const { projectId } = req.params;
+      const agents = await storage.getProjectAgents(projectId);
+      res.json(agents);
+    } catch (error) {
+      console.error('Error getting project agents:', error);
+      res.status(500).json({ message: "Failed to get project agents" });
+    }
+  });
+
+  app.get("/api/project-agents/:id", checkActivationSoft, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const agent = await storage.getProjectAgent(id);
+      
+      if (!agent) {
+        return res.status(404).json({ message: "Project agent not found" });
+      }
+      
+      res.json(agent);
+    } catch (error) {
+      console.error('Error getting project agent:', error);
+      res.status(500).json({ message: "Failed to get project agent" });
+    }
+  });
+
+  app.post("/api/project-agents", requireActivation, apiRateLimiter, async (req, res) => {
+    try {
+      const validatedAgent = insertProjectAgentSchema.parse(req.body);
+      const agent = await storage.createProjectAgent(validatedAgent);
+      
+      // Log activity
+      await storage.createActivityLog({
+        type: 'project_agent_created',
+        description: `Project agent created: ${agent.name} (${agent.role})`,
+        metadata: { projectId: agent.projectId, agentId: agent.id }
+      });
+      
+      res.status(201).json(agent);
+    } catch (error) {
+      console.error('Error creating project agent:', error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Validation error", 
+          errors: error.errors 
+        });
+      }
+      res.status(500).json({ message: "Failed to create project agent" });
+    }
+  });
+
+  app.put("/api/project-agents/:id", requireActivation, apiRateLimiter, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const updates = insertProjectAgentSchema.partial().parse(req.body);
+      
+      const agent = await storage.updateProjectAgent(id, updates);
+      
+      if (!agent) {
+        return res.status(404).json({ message: "Project agent not found" });
+      }
+      
+      // Log activity
+      await storage.createActivityLog({
+        type: 'project_agent_updated',
+        description: `Project agent updated: ${agent.name}`,
+        metadata: { projectId: agent.projectId, agentId: agent.id }
+      });
+      
+      res.json(agent);
+    } catch (error) {
+      console.error('Error updating project agent:', error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Validation error", 
+          errors: error.errors 
+        });
+      }
+      res.status(500).json({ message: "Failed to update project agent" });
+    }
+  });
+
+  app.delete("/api/project-agents/:id", requireActivation, apiRateLimiter, async (req, res) => {
+    try {
+      const { id } = req.params;
+      
+      // Get agent info before deletion for logging
+      const agent = await storage.getProjectAgent(id);
+      
+      const deleted = await storage.deleteProjectAgent(id);
+      
+      if (!deleted) {
+        return res.status(404).json({ message: "Project agent not found" });
+      }
+      
+      // Log activity
+      if (agent) {
+        await storage.createActivityLog({
+          type: 'project_agent_deleted',
+          description: `Project agent deleted: ${agent.name}`,
+          metadata: { projectId: agent.projectId, agentId: agent.id }
+        });
+      }
+      
+      res.json({ message: "Project agent deleted successfully" });
+    } catch (error) {
+      console.error('Error deleting project agent:', error);
+      res.status(500).json({ message: "Failed to delete project agent" });
+    }
+  });
+
+  // Agent Conversations endpoints
+  app.get("/api/project-agents/:agentId/conversations", checkActivationSoft, async (req, res) => {
+    try {
+      const { agentId } = req.params;
+      const conversations = await storage.getAgentConversations(agentId);
+      res.json(conversations);
+    } catch (error) {
+      console.error('Error getting agent conversations:', error);
+      res.status(500).json({ message: "Failed to get agent conversations" });
+    }
+  });
+
+  app.post("/api/agent-conversations", requireActivation, apiRateLimiter, async (req, res) => {
+    try {
+      const validatedConversation = insertAgentConversationSchema.parse(req.body);
+      const conversation = await storage.createAgentConversation(validatedConversation);
+      
+      res.status(201).json(conversation);
+    } catch (error) {
+      console.error('Error creating agent conversation:', error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Validation error", 
+          errors: error.errors 
+        });
+      }
+      res.status(500).json({ message: "Failed to create agent conversation" });
+    }
+  });
+
+  // Project Posts endpoints
+  app.get("/api/project-posts", checkActivationSoft, async (req, res) => {
+    try {
+      const { projectId } = req.query;
+      const posts = await storage.getProjectPosts(projectId as string);
+      res.json(posts);
+    } catch (error) {
+      console.error('Error getting project posts:', error);
+      res.status(500).json({ message: "Failed to get project posts" });
+    }
+  });
+
+  app.get("/api/project-posts/:id", checkActivationSoft, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const post = await storage.getProjectPost(id);
+      
+      if (!post) {
+        return res.status(404).json({ message: "Project post not found" });
+      }
+      
+      res.json(post);
+    } catch (error) {
+      console.error('Error getting project post:', error);
+      res.status(500).json({ message: "Failed to get project post" });
+    }
+  });
+
+  app.post("/api/project-posts", requireActivation, apiRateLimiter, async (req, res) => {
+    try {
+      const validatedPost = insertProjectPostSchema.parse(req.body);
+      const post = await storage.createProjectPost(validatedPost);
+      
+      // Log activity
+      await storage.createActivityLog({
+        type: 'project_post_created',
+        description: `Project post created: ${post.title || 'Untitled'}`,
+        metadata: { projectId: post.projectId, postId: post.id }
+      });
+      
+      res.status(201).json(post);
+    } catch (error) {
+      console.error('Error creating project post:', error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Validation error", 
+          errors: error.errors 
+        });
+      }
+      res.status(500).json({ message: "Failed to create project post" });
+    }
+  });
+
+  app.put("/api/project-posts/:id", requireActivation, apiRateLimiter, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const updates = insertProjectPostSchema.partial().parse(req.body);
+      
+      const post = await storage.updateProjectPost(id, updates);
+      
+      if (!post) {
+        return res.status(404).json({ message: "Project post not found" });
+      }
+      
+      // Log activity
+      await storage.createActivityLog({
+        type: 'project_post_updated',
+        description: `Project post updated: ${post.title || 'Untitled'}`,
+        metadata: { projectId: post.projectId, postId: post.id }
+      });
+      
+      res.json(post);
+    } catch (error) {
+      console.error('Error updating project post:', error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ 
+          message: "Validation error", 
+          errors: error.errors 
+        });
+      }
+      res.status(500).json({ message: "Failed to update project post" });
+    }
+  });
+
+  app.delete("/api/project-posts/:id", requireActivation, apiRateLimiter, async (req, res) => {
+    try {
+      const { id } = req.params;
+      
+      // Get post info before deletion for logging
+      const post = await storage.getProjectPost(id);
+      
+      const deleted = await storage.deleteProjectPost(id);
+      
+      if (!deleted) {
+        return res.status(404).json({ message: "Project post not found" });
+      }
+      
+      // Log activity
+      if (post) {
+        await storage.createActivityLog({
+          type: 'project_post_deleted',
+          description: `Project post deleted: ${post.title || 'Untitled'}`,
+          metadata: { projectId: post.projectId, postId: post.id }
+        });
+      }
+      
+      res.json({ message: "Project post deleted successfully" });
+    } catch (error) {
+      console.error('Error deleting project post:', error);
+      res.status(500).json({ message: "Failed to delete project post" });
     }
   });
 

@@ -12,6 +12,7 @@ import {
   Wifi,
   FileText,
   Globe,
+  Bot,
   Menu,
   X
 } from "lucide-react";
@@ -68,6 +69,11 @@ const navigation = [
     name: "nav.web-sources",
     href: "/web-sources",
     icon: Globe,
+  },
+  {
+    name: "nav.projects", 
+    href: "/projects",
+    icon: Bot,
   },
   {
     name: "nav.analytics",

@@ -1,6 +1,7 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { WebSocketServer } from "ws";
 import { createServer } from "http";
+import cookieParser from "cookie-parser";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 
@@ -11,6 +12,7 @@ app.set('trust proxy', true);
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+app.use(cookieParser());
 
 app.use((req, res, next) => {
   const start = Date.now();

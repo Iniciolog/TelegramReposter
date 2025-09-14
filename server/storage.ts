@@ -19,6 +19,14 @@ import {
   type InsertRateLimitAttempt,
   type UserSession,
   type InsertUserSession,
+  type Project,
+  type InsertProject,
+  type ProjectAgent,
+  type InsertProjectAgent,
+  type AgentConversation,
+  type InsertAgentConversation,
+  type ProjectPost,
+  type InsertProjectPost,
   channelPairs,
   posts,
   activityLogs,
@@ -28,7 +36,11 @@ import {
   webSources,
   activationTokens,
   rateLimitAttempts,
-  userSessions
+  userSessions,
+  projects,
+  projectAgents,
+  agentConversations,
+  projectPosts
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, lte, and, sql } from "drizzle-orm";
@@ -104,6 +116,31 @@ export interface IStorage {
   getUserSessionStatus(sessionToken: string): Promise<{ isActivated: boolean; isBlocked: boolean; trialExpired: boolean } | undefined>;
   generateSessionToken(): string;
   
+  // Projects
+  getProjects(): Promise<Project[]>;
+  getProject(id: string): Promise<Project | undefined>;
+  createProject(project: InsertProject): Promise<Project>;
+  updateProject(id: string, project: Partial<InsertProject>): Promise<Project | undefined>;
+  deleteProject(id: string): Promise<boolean>;
+
+  // Project Agents
+  getProjectAgents(projectId: string): Promise<ProjectAgent[]>;
+  getProjectAgent(id: string): Promise<ProjectAgent | undefined>;
+  createProjectAgent(agent: InsertProjectAgent): Promise<ProjectAgent>;
+  updateProjectAgent(id: string, agent: Partial<InsertProjectAgent>): Promise<ProjectAgent | undefined>;
+  deleteProjectAgent(id: string): Promise<boolean>;
+
+  // Agent Conversations
+  getAgentConversations(agentId: string): Promise<AgentConversation[]>;
+  createAgentConversation(conversation: InsertAgentConversation): Promise<AgentConversation>;
+
+  // Project Posts
+  getProjectPosts(projectId?: string): Promise<ProjectPost[]>;
+  getProjectPost(id: string): Promise<ProjectPost | undefined>;
+  createProjectPost(post: InsertProjectPost): Promise<ProjectPost>;
+  updateProjectPost(id: string, post: Partial<InsertProjectPost>): Promise<ProjectPost | undefined>;
+  deleteProjectPost(id: string): Promise<boolean>;
+
   // Analytics
   getStats(): Promise<{
     activeChannels: number;
@@ -757,13 +794,13 @@ export class DatabaseStorage implements IStorage {
     }
 
     const trialDuration = 30 * 60 * 1000; // 30 minutes in milliseconds
-    const trialExpired = !session.isActivated && 
-      (session.totalUsageTime >= trialDuration || 
-       (Date.now() - session.trialStartTime.getTime()) >= trialDuration);
+    const trialExpired = !(session.isActivated ?? false) && 
+      ((session.totalUsageTime ?? 0) >= trialDuration || 
+       (Date.now() - (session.trialStartTime?.getTime() ?? 0)) >= trialDuration);
 
     return {
-      isActivated: session.isActivated,
-      isBlocked: session.isBlocked,
+      isActivated: session.isActivated ?? false,
+      isBlocked: session.isBlocked ?? false,
       trialExpired
     };
   }
@@ -773,6 +810,175 @@ export class DatabaseStorage implements IStorage {
     return 'sess_' + Array.from(crypto.getRandomValues(new Uint8Array(16)))
       .map(b => b.toString(16).padStart(2, '0'))
       .join('');
+  }
+
+  // Projects Implementation
+  async getProjects(): Promise<Project[]> {
+    return await db.select().from(projects);
+  }
+
+  async getProject(id: string): Promise<Project | undefined> {
+    const [project] = await db.select().from(projects).where(eq(projects.id, id));
+    return project || undefined;
+  }
+
+  async createProject(insertProject: InsertProject): Promise<Project> {
+    const [project] = await db
+      .insert(projects)
+      .values({
+        ...insertProject,
+        status: insertProject.status || 'active',
+        objectives: insertProject.objectives || [],
+        targetChannels: insertProject.targetChannels || [],
+        timeline: insertProject.timeline || {},
+        settings: insertProject.settings || {},
+      })
+      .returning();
+    return project;
+  }
+
+  async updateProject(id: string, updates: Partial<InsertProject>): Promise<Project | undefined> {
+    const [project] = await db
+      .update(projects)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(projects.id, id))
+      .returning();
+    return project || undefined;
+  }
+
+  async deleteProject(id: string): Promise<boolean> {
+    try {
+      // Delete related project posts first
+      await db.delete(projectPosts).where(eq(projectPosts.projectId, id));
+      
+      // Delete conversations for project agents
+      const projectAgentsData = await db.select().from(projectAgents).where(eq(projectAgents.projectId, id));
+      for (const agent of projectAgentsData) {
+        await db.delete(agentConversations).where(eq(agentConversations.agentId, agent.id));
+      }
+      
+      // Delete project agents
+      await db.delete(projectAgents).where(eq(projectAgents.projectId, id));
+      
+      // Finally delete the project
+      const result = await db.delete(projects).where(eq(projects.id, id));
+      return (result.rowCount ?? 0) > 0;
+    } catch (error) {
+      console.error('Error deleting project:', error);
+      return false;
+    }
+  }
+
+  // Project Agents Implementation
+  async getProjectAgents(projectId: string): Promise<ProjectAgent[]> {
+    return await db.select().from(projectAgents).where(eq(projectAgents.projectId, projectId));
+  }
+
+  async getProjectAgent(id: string): Promise<ProjectAgent | undefined> {
+    const [agent] = await db.select().from(projectAgents).where(eq(projectAgents.id, id));
+    return agent || undefined;
+  }
+
+  async createProjectAgent(insertAgent: InsertProjectAgent): Promise<ProjectAgent> {
+    const [agent] = await db
+      .insert(projectAgents)
+      .values({
+        ...insertAgent,
+        role: insertAgent.role || 'content_manager',
+        isActive: insertAgent.isActive ?? true,
+      })
+      .returning();
+    return agent;
+  }
+
+  async updateProjectAgent(id: string, updates: Partial<InsertProjectAgent>): Promise<ProjectAgent | undefined> {
+    const [agent] = await db
+      .update(projectAgents)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(projectAgents.id, id))
+      .returning();
+    return agent || undefined;
+  }
+
+  async deleteProjectAgent(id: string): Promise<boolean> {
+    try {
+      // Delete related conversations first
+      await db.delete(agentConversations).where(eq(agentConversations.agentId, id));
+      
+      // Delete the agent
+      const result = await db.delete(projectAgents).where(eq(projectAgents.id, id));
+      return (result.rowCount ?? 0) > 0;
+    } catch (error) {
+      console.error('Error deleting project agent:', error);
+      return false;
+    }
+  }
+
+  // Agent Conversations Implementation
+  async getAgentConversations(agentId: string): Promise<AgentConversation[]> {
+    return await db.select().from(agentConversations)
+      .where(eq(agentConversations.agentId, agentId))
+      .orderBy(agentConversations.createdAt);
+  }
+
+  async createAgentConversation(insertConversation: InsertAgentConversation): Promise<AgentConversation> {
+    const [conversation] = await db
+      .insert(agentConversations)
+      .values({
+        ...insertConversation,
+        metadata: insertConversation.metadata || {},
+      })
+      .returning();
+    return conversation;
+  }
+
+  // Project Posts Implementation
+  async getProjectPosts(projectId?: string): Promise<ProjectPost[]> {
+    if (projectId) {
+      return await db.select().from(projectPosts)
+        .where(eq(projectPosts.projectId, projectId))
+        .orderBy(desc(projectPosts.scheduledAt));
+    }
+    return await db.select().from(projectPosts).orderBy(desc(projectPosts.scheduledAt));
+  }
+
+  async getProjectPost(id: string): Promise<ProjectPost | undefined> {
+    const [post] = await db.select().from(projectPosts).where(eq(projectPosts.id, id));
+    return post || undefined;
+  }
+
+  async createProjectPost(insertPost: InsertProjectPost): Promise<ProjectPost> {
+    const [post] = await db
+      .insert(projectPosts)
+      .values({
+        ...insertPost,
+        status: insertPost.status || 'planned',
+        postType: insertPost.postType || 'original',
+        mediaUrls: insertPost.mediaUrls || [],
+        targetChannelIds: insertPost.targetChannelIds || [],
+        publishedPostIds: insertPost.publishedPostIds || [],
+      })
+      .returning();
+    return post;
+  }
+
+  async updateProjectPost(id: string, updates: Partial<InsertProjectPost>): Promise<ProjectPost | undefined> {
+    const [post] = await db
+      .update(projectPosts)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(projectPosts.id, id))
+      .returning();
+    return post || undefined;
+  }
+
+  async deleteProjectPost(id: string): Promise<boolean> {
+    try {
+      const result = await db.delete(projectPosts).where(eq(projectPosts.id, id));
+      return (result.rowCount ?? 0) > 0;
+    } catch (error) {
+      console.error('Error deleting project post:', error);
+      return false;
+    }
   }
 }
 
